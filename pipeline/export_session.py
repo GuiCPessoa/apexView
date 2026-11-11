@@ -5,23 +5,25 @@ Uso: python export_session.py 2024 Monza R
 
 from __future__ import annotations
 
-import json
-import math
-import re
 import sys
-import unicodedata
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 import fastf1
 import pandas as pd
 
-PIPELINE_DIR = Path(__file__).resolve().parent
-CACHE_DIR = PIPELINE_DIR / "cache"
-DATA_DIR = PIPELINE_DIR.parent / "data"
-
-SCHEMA_VERSION = 1
+from common import (
+    DATA_DIR,
+    SCHEMA_VERSION,
+    now_iso,
+    setup_cache,
+    slugify,
+    to_float,
+    to_int,
+    to_seconds,
+    to_str,
+    update_index,
+    write_json,
+)
 
 # Nome da sessão no FastF1 -> código curto usado no caminho dos arquivos
 SESSION_CODES = {
@@ -35,42 +37,6 @@ SESSION_CODES = {
     "Race": "R",
 }
 
-
-def slugify(text: str) -> str:
-    """'São Paulo' -> 'sao-paulo'."""
-    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
-    return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")
-
-
-def to_seconds(value: Any) -> float | None:
-    """Timedelta -> segundos (float). NaT/NaN -> None."""
-    if value is None or pd.isna(value):
-        return None
-    return round(value.total_seconds(), 3)
-
-
-def to_int(value: Any) -> int | None:
-    if value is None or pd.isna(value):
-        return None
-    return int(value)
-
-
-def to_float(value: Any) -> float | None:
-    if value is None or pd.isna(value):
-        return None
-    f = float(value)
-    return None if math.isnan(f) else f
-
-
-def to_str(value: Any) -> str | None:
-    if value is None or pd.isna(value) or value == "":
-        return None
-    return str(value)
-
-
-def write_json(path: Path, data: Any) -> None:
-    # allow_nan=False garante JSON válido (sem NaN/Infinity)
-    path.write_text(json.dumps(data, ensure_ascii=False, allow_nan=False, indent=None, separators=(",", ":")))
 
 
 def build_results(session) -> list[dict]:
@@ -130,32 +96,13 @@ def build_meta(session, session_code: str, slug: str) -> dict:
             pd.Timestamp(session_date).tz_localize("UTC").isoformat()
             if session_date is not None and not pd.isna(session_date) else None
         ),
-        "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generatedAt": now_iso(),
         "fastf1Version": fastf1.__version__,
     }
 
 
-def update_index(data_dir: Path = DATA_DIR) -> list[dict]:
-    """Recria data/index.json a partir de todos os meta.json existentes."""
-    entries = []
-    for meta_path in sorted(data_dir.glob("*/*/*/meta.json")):
-        meta = json.loads(meta_path.read_text())
-        entries.append({
-            "path": meta_path.parent.relative_to(data_dir).as_posix(),
-            "year": meta["year"],
-            "round": meta["round"],
-            "eventName": meta["eventName"],
-            "session": meta["session"],
-            "sessionName": meta["sessionName"],
-        })
-    entries.sort(key=lambda e: (e["year"], e["round"], e["session"]))
-    write_json(data_dir / "index.json", entries)
-    return entries
-
-
 def export_session(year: int, gp: str, ident: str, data_dir: Path = DATA_DIR) -> Path:
-    CACHE_DIR.mkdir(exist_ok=True)
-    fastf1.Cache.configure(cache_dir=str(CACHE_DIR))
+    setup_cache()
 
     session = fastf1.get_session(year, gp, ident)
     # Fase 0: só resultados e voltas. Telemetria entra na fase 2/3.

@@ -107,6 +107,8 @@ if __name__ == "__main__":
 
 Teste: `python export_session.py 2024 Monza R`
 
+Calendário e classificação de uma temporada (Jolpica, sem login): `python export_standings.py 2026`
+
 > A primeira execução baixa muitos dados e é lenta. Depois, o cache acelera.
 
 > **Versão atual do script:** o código acima é só o ponto de partida. O script real em `pipeline/export_session.py` também grava `meta.json` e `data/index.json`, usa a pasta `{rodada}-{local}` (ex.: `2024/16-monza/R`) e converte `NaN` em `null`. O formato completo está em `docs/data-format.md`.
@@ -130,7 +132,7 @@ printf "pipeline/cache/\npipeline/.venv/\nnode_modules/\n" > .gitignore
 ## 5. Roadmap
 
 - [x] **Fase 0 — Setup:** repositório, venv, Vite rodando, primeiro export de uma corrida
-- [ ] **Fase 1 — Standings e calendário:** tabelas de pilotos e equipes (Jolpica)
+- [x] **Fase 1 — Standings e calendário:** tabelas de pilotos e equipes (Jolpica). `python export_standings.py 2026` gera `calendar.json` e `standings.json`; o site tem as abas Classificação, Calendário e Sessões
 - [ ] **Fase 2 — Mapa da pista:** traçado a partir de X/Y de uma volta rápida; replay com slider de tempo
 - [ ] **Fase 3 — Telemetria:** comparar duas voltas (velocidade, acelerador, freio, marcha, DRS) alinhadas por distância
 - [ ] **Fase 4 — Corrida:** posições por volta, estratégia de pneus (stints), pit stops, gaps

@@ -24,7 +24,7 @@ Leia `INICIO.md` para o guia completo (arquitetura, setup, roadmap e riscos).
 - Mudou o formato dos dados? Atualize `docs/data-format.md` e os tipos em `web/src/types/`.
 
 ## Comandos
-- Pipeline: `cd pipeline && source .venv/bin/activate` (Windows: `.venv\Scripts\activate`), depois `python export_session.py 2024 Monza R`
+- Pipeline: `cd pipeline && source .venv/bin/activate` (Windows: `.venv\Scripts\activate`), depois `python export_session.py 2024 Monza R` (sessão, exige login F1 TV) ou `python export_standings.py 2026` (calendário e classificação)
 - Frontend: `cd web && npm install && npm run dev`
 - Testes do pipeline: `cd pipeline && pytest`
 
