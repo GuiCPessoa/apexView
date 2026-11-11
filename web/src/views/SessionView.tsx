@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { formatLapTime, formatPoints, loadLaps, loadMeta, loadResults } from '../lib/data'
 import { routeHref, useAsync, type SessionTab } from '../lib/route'
 import ReplayView from './ReplayView'
+import TelemetryView from './TelemetryView'
 import type { DataIndex, DriverResult, Lap, SessionMeta } from '../types/data'
 
 export default function SessionView({ path, tab, index }: { path: string | null; tab: SessionTab; index: DataIndex }) {
@@ -62,12 +63,23 @@ export default function SessionView({ path, tab, index }: { path: string | null;
                 Mapa e replay
               </span>
             )}
-            <span className="disabled" title="Chega na fase 3">
-              Telemetria
-            </span>
+            {data[0].telemetry?.length ? (
+              <a
+                href={routeHref({ view: 'session', path: current, tab: 'telemetry' })}
+                className={tab === 'telemetry' ? 'active' : undefined}
+              >
+                Telemetria
+              </a>
+            ) : (
+              <span className="disabled" title="Sessão exportada sem telemetria">
+                Telemetria
+              </span>
+            )}
           </nav>
           {tab === 'replay' && data[0].replay ? (
             <ReplayView key={current} path={current} meta={data[0]} results={data[1]} laps={data[2]} />
+          ) : tab === 'telemetry' && data[0].telemetry?.length ? (
+            <TelemetryView key={current} path={current} meta={data[0]} results={data[1]} laps={data[2]} />
           ) : (
             <ResultsTable meta={data[0]} results={data[1]} laps={data[2]} />
           )}

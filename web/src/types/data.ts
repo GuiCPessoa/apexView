@@ -100,6 +100,7 @@ export interface SessionMeta {
   generatedAt: string
   fastf1Version: string
   replay: ReplayInfo | null
+  telemetry: string[] // pilotos com telemetry/{DRV}.json.gz
 }
 
 /** Janela do replay em segundos de sessão (SessionTime) */
@@ -180,4 +181,24 @@ export interface DriverPositions {
   hz: number
   x: (number | null)[]
   y: (number | null)[]
+}
+
+/** telemetry/{DRV}.json.gz */
+export interface DriverTelemetry {
+  driver: string
+  laps: LapTelemetry[]
+}
+
+/** Amostras originais do carro numa volta; todas as listas têm o mesmo tamanho */
+export interface LapTelemetry {
+  lap: number
+  lapTime: number | null
+  compound: string | null
+  d: number[] // distância desde o início da volta (m)
+  t: number[] // tempo desde o início da volta (s)
+  speed: number[] // km/h
+  throttle: number[] // 0–100
+  brake: number[] // 0/1
+  gear: number[] // 0–8
+  drs: number[] // 0/1
 }

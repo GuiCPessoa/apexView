@@ -761,3 +761,148 @@ code {
     order: 4;
   }
 }
+
+/* Telemetria */
+.lap-pickers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.lap-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.lap-picker select {
+  min-width: 0;
+  flex: 1;
+}
+
+.picker-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  font-weight: 800;
+  flex: none;
+}
+
+.icon-btn.swap {
+  font-size: 18px;
+}
+
+.tele-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.summary-table {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.diff-row td {
+  font-weight: 600;
+}
+
+.mini-map {
+  width: 100%;
+  max-height: 170px;
+}
+
+.mini-start {
+  fill: var(--muted);
+}
+
+.mini-marker {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 6;
+}
+
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  min-height: 40px;
+  align-items: center;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.readout i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: -1px;
+}
+
+.tcharts {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 4px 4px;
+  overflow: hidden;
+}
+
+.tchart {
+  position: relative;
+}
+
+.tchart-title {
+  position: absolute;
+  top: 2px;
+  left: 56px;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.tcharts .u-select {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+@media (max-width: 760px) {
+  .lap-pickers {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .icon-btn.swap {
+    justify-self: center;
+    transform: rotate(90deg);
+  }
+
+  .tele-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mini-map {
+    max-height: 140px;
+  }
+}

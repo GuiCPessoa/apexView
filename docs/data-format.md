@@ -23,7 +23,8 @@ data/
         ├── meta.json
         ├── results.json
         ├── laps.json
-        ├── track.json              # traçado da pista (só R e S)
+        ├── track.json              # traçado da pista
+        ├── telemetry/{DRV}.json.gz # telemetria de cada volta, por piloto
         ├── track_status.json       # bandeiras e safety car (só R e S)
         └── positions/{DRV}.json.gz # posições X/Y para o replay (só R e S)
 ```
@@ -120,6 +121,7 @@ As cores vêm do arquivo de constantes do FastF1 (`fastf1/plotting/constants.jso
 | `replay.start`, `replay.end` | float | Janela do replay em segundos de sessão: da largada (início da volta 1) a 60 s depois do último carro fechar a volta |
 | `replay.hz` | int | Amostras por segundo das posições (4) |
 | `replay.drivers` | string[] | Pilotos com arquivo em `positions/` |
+| `telemetry` | string[] | Pilotos com arquivo em `telemetry/` (vazio se não houver) |
 
 ## `results.json`
 
@@ -158,7 +160,7 @@ Uma linha por volta de cada piloto.
 
 ## `track.json`
 
-Traçado tirado da volta mais rápida da sessão, com um ponto a cada 10 m.
+Traçado tirado da volta mais rápida da sessão, com um ponto a cada 10 m. Exportado para toda sessão (o replay e a telemetria usam).
 
 | Campo | Tipo | Descrição |
 |---|---|---|
@@ -197,6 +199,29 @@ Um arquivo por piloto, em JSON comprimido com gzip (o front descomprime com `Dec
 - `x`, `y` são inteiros em metros. `null` quando não há dado real a menos de 3 s (carro na garagem, abandono, falha de transmissão).
 - Monza 2024 (corrida, 77 min): cerca de 40 KB por piloto, 842 KB no total.
 
-## Próximos (fase 3)
+## `telemetry/{DRV}.json.gz`
 
-`telemetry/{DRV}.json.gz` (velocidade, acelerador, freio, marcha e DRS por volta, alinhados por distância) ainda não é exportado.
+Um arquivo por piloto com todas as voltas que têm dados do carro, em JSON comprimido com gzip. São as **amostras originais** do carro (~4 Hz, ~300 por volta em Monza), sem reamostragem. Para comparar duas voltas, o front interpola as duas numa mesma grade de distância.
+
+```json
+{"driver": "LEC", "laps": [{"lap": 33, "lapTime": 83.226, "compound": "HARD",
+  "d": [9.3, 41.3, ...], "t": [0.0, 0.36, ...], "speed": [331, 333, ...],
+  "throttle": [100, ...], "brake": [0, ...], "gear": [8, ...], "drs": [1, ...]}]}
+```
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `lap` | int | Número da volta |
+| `lapTime` | float \| null | Tempo oficial da volta (s) |
+| `compound` | string \| null | Composto do pneu |
+| `d` | float[] | Distância desde o início da volta (m), crescente |
+| `t` | float[] | Tempo desde o início da volta (s) |
+| `speed` | int[] | Velocidade (km/h) |
+| `throttle` | int[] | Acelerador, 0–100 % (o feed às vezes manda >100; limitado a 100) |
+| `brake` | int[] | Freio acionado: 1/0 |
+| `gear` | int[] | Marcha, 0–8 |
+| `drs` | int[] | DRS aberto: 1/0 (códigos 10, 12 e 14 do live timing) |
+
+- Todas as listas de uma volta têm o mesmo tamanho.
+- A distância vem da integração da velocidade (`add_distance` do FastF1). Por isso ela pode terminar alguns metros antes ou depois do comprimento real da volta.
+- Monza 2024 (corrida): até 130 KB por piloto, 2,4 MB no total. O front só baixa os pilotos que estão sendo comparados.

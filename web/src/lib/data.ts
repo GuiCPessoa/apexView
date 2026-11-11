@@ -3,6 +3,7 @@ import type {
   DataIndex,
   DriverPositions,
   DriverResult,
+  DriverTelemetry,
   Lap,
   SessionMeta,
   Standings,
@@ -41,6 +42,8 @@ export const loadResults = (path: string) => getJson<DriverResult[]>(`${path}/re
 export const loadLaps = (path: string) => getJson<Lap[]>(`${path}/laps.json`)
 export const loadTrack = (path: string) => getJson<Track>(`${path}/track.json`)
 export const loadTrackStatus = (path: string) => getJson<TrackStatusChange[]>(`${path}/track_status.json`)
+export const loadTelemetry = (path: string, driver: string) =>
+  getJsonGz<DriverTelemetry>(`${path}/telemetry/${driver}.json.gz`)
 export const loadPositions = (path: string, driver: string) =>
   getJsonGz<DriverPositions>(`${path}/positions/${driver}.json.gz`)
 
