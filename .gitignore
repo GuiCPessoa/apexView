@@ -14,3 +14,6 @@ web/dist/
 .env
 .env.*
 .DS_Store
+
+# Modo ao vivo: gravações do feed (uso pessoal, não publicar)
+live/recordings/

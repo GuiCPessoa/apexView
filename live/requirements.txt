@@ -1,0 +1,5 @@
+# Modo ao vivo (fase 6): python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+livef1==1.4.1
+fastapi[standard]==0.162.4
+requests
+pytest

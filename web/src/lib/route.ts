@@ -5,6 +5,7 @@ export type Route =
   | { view: 'standings'; year: number | null }
   | { view: 'calendar'; year: number | null }
   | { view: 'session'; path: string | null; tab?: SessionTab }
+  | { view: 'live' }
 
 export type SessionTab = 'results' | 'race' | 'laps' | 'replay' | 'telemetry'
 
@@ -16,6 +17,8 @@ export function parseRoute(hash: string): Route {
   switch (view) {
     case 'calendario':
       return { view: 'calendar', year }
+    case 'ao-vivo':
+      return { view: 'live' }
     case 'sessao':
       return {
         view: 'session',
@@ -34,6 +37,8 @@ export function routeHref(route: Route): string {
       return `#/classificacao${route.year ? `/${route.year}` : ''}`
     case 'calendar':
       return `#/calendario${route.year ? `/${route.year}` : ''}`
+    case 'live':
+      return '#/ao-vivo'
     case 'session':
       return `#/sessao${route.path ? `/${route.path}` : ''}${route.path && route.tab && route.tab !== 'results' ? `/${TAB_SLUG[route.tab]}` : ''}`
   }

@@ -1621,3 +1621,445 @@ table.compact .team-bar {
     min-width: 0;
   }
 }
+
+/* ---------- Ao vivo ---------- */
+
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+}
+
+.live-badge::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.live-badge.sim {
+  color: #f5c400;
+}
+
+.live-badge.sim::before {
+  animation: none;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.hero-stats .stat select {
+  margin: 2px 0;
+}
+
+.seg {
+  display: flex;
+  padding: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.seg button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.seg button.active {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.live-car {
+  transition: transform 260ms linear;
+}
+
+.trail-dot {
+  fill: #3a3a44;
+}
+
+.replay-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 8px 14px;
+  margin-bottom: 14px;
+  background: var(--surface);
+  border: 1px solid rgba(245, 196, 0, 0.35);
+  border-radius: 10px;
+}
+
+.live-tower li {
+  gap: 7px;
+}
+
+.t-last {
+  font-size: 12px;
+  min-width: 62px;
+  text-align: right;
+}
+
+.tyre-age {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 34px;
+  font-size: 12px;
+}
+
+.personal {
+  color: var(--up);
+}
+
+.out-tag {
+  background: var(--muted);
+}
+
+.cars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.car-panel {
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-top-width: 3px;
+  border-radius: 10px;
+}
+
+.car-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.car-head strong {
+  font-size: 18px;
+}
+
+.car-pos {
+  font-weight: 900;
+  font-style: italic;
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.gauges {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.gauges .speed,
+.gauges .gear {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+
+.gauges .big {
+  font-size: 40px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.gauges .speed .big {
+  min-width: 3ch;
+  text-align: right;
+}
+
+.gauges .muted {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.bar-label b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-track {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: #24242b;
+  overflow: hidden;
+}
+
+.bar-track span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 240ms linear;
+}
+
+.bar.rpm .bar-track span {
+  background: linear-gradient(90deg, #6d28d9, #e10600);
+}
+
+.bar.throttle .bar-track span {
+  background: var(--up);
+}
+
+.bar.brake .bar-track span {
+  background: var(--accent);
+}
+
+.drs {
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.drs.on {
+  color: #04130c;
+  background: var(--up);
+  border-color: var(--up);
+}
+
+.lap-times {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.lap-times div,
+.weather div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.lap-times .muted,
+.weather .muted {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.weather {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  padding-bottom: 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 340px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.rc-list li {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.rc-list li:last-child {
+  border-bottom: 0;
+}
+
+.rc-meta {
+  margin-right: 8px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.rc-flag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  color: var(--muted);
+}
+
+.rc-green,
+.rc-clear {
+  color: var(--up);
+}
+
+.rc-yellow,
+.rc-double-yellow {
+  color: #f5c400;
+}
+
+.rc-red {
+  color: var(--accent);
+}
+
+.rc-blue {
+  color: #3b82f6;
+}
+
+.rc-chequered {
+  color: var(--text);
+}
+
+pre.code {
+  margin: 8px 0 12px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+@media (max-width: 640px) {
+  .gauges {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+
+  .gauges .drs {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .gauges .big {
+    font-size: 32px;
+  }
+
+  .weather,
+  .lap-times {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* gráficos da volta ao vivo */
+.lap-traces {
+  margin-top: 14px;
+}
+
+.traces-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.traces-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.traces-legend i {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.traces-empty {
+  margin: 14px 0 0;
+  font-size: 13px;
+}
+
+.trace-chart {
+  position: relative;
+  margin-top: 6px;
+  padding-top: 16px;
+}
+
+.trace-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.trace-chart svg {
+  display: block;
+  width: 100%;
+  background: var(--bg);
+  border-radius: 4px;
+}
+
+.trace-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.trace-line {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.trace-line.prev {
+  stroke-width: 1.2;
+  stroke-dasharray: 4 4;
+  opacity: 0.45;
+}
+
+.trace-axis {
+  position: relative;
+  height: 18px;
+  margin-top: 2px;
+}
+
+.trace-axis span {
+  position: absolute;
+  transform: translateX(-100%);
+  padding-right: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}

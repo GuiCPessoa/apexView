@@ -236,3 +236,42 @@ Um arquivo por piloto com todas as voltas que têm dados do carro, em JSON compr
 - Todas as listas de uma volta têm o mesmo tamanho.
 - A distância vem da integração da velocidade (`add_distance` do FastF1). Por isso ela pode terminar alguns metros antes ou depois do comprimento real da volta.
 - Monza 2024 (corrida): ~50 KB por piloto, ~1 MB no total (2,4 MB antes da codificação em diferenças). O front só baixa os pilotos que estão sendo comparados.
+
+## Modo ao vivo (fase 6)
+
+O backend local (`live/server.py`) não grava arquivos em `data/`: ele manda **snapshots** por WebSocket (`ws://127.0.0.1:8000/ws`), 4 vezes por segundo. Cada snapshot é o estado completo da sessão naquele instante, já normalizado (tipos em `web/src/types/live.ts`).
+
+```json
+{"type": "snapshot", "time": 1794163777.465,
+ "session": {"meeting": "São Paulo Grand Prix", "circuit": "Interlagos", "name": "Race", "type": "Race", "status": "Started", ...},
+ "lap": {"current": 34, "total": 71}, "clock": {"remaining": 3612.0, "running": true},
+ "trackStatus": "green", "weather": {"airTemp": 15.6, "trackTemp": 22.2, "humidity": 90.1, "rainfall": false, "windSpeed": 3.0},
+ "drivers": [{"driver": "NOR", "position": 1, "gap": "LAP 34", "interval": null,
+   "lastLap": {"time": 73.1, "best": "personal"}, "bestLap": {...}, "sectors": [{...}, null, null],
+   "compound": "SOFT", "tyreAge": 12, "inPit": false, "x": -346.8, "y": 120.4,
+   "speed": 298, "gear": 7, "rpm": 11200, "throttle": 100, "brake": 0, "drs": false, ...}],
+ "raceControl": [{"utc": "2026-11-08T18:43:45", "lap": 71, "category": "Flag", "flag": "YELLOW", "message": "..."}],
+ "outline": [[x, y], ...],
+ "source": {"mode": "replay", "speed": 4, "paused": false, "elapsed": 6000.0, "duration": 9600.6}}
+```
+
+- `time` é o horário do feed (epoch UTC, s). As posições `x`, `y` (metros) são interpoladas 2 s atrás desse horário, para ficarem suaves entre as amostras; os canais do carro (`speed`, `gear`, `rpm`, `throttle`, `brake`, `drs`) usam o mesmo instante, para casar com o mapa.
+- `gap` e `interval` são o texto do feed (`"+1.234"`, `"1 L"`, `"LAP 34"`); o front traduz. Na classificação vêm da diferença no segmento atual.
+- `lastLap`, `bestLap` e `sectors` têm `best`: `"overall"` (roxo, melhor da sessão) ou `"personal"` (verde, melhor do piloto).
+- `outline` é o traçado montado com uma volta limpa de algum carro (`null` até existir). Só vai no snapshot quando muda; quando a chave falta, vale o último recebido.
+- `traces` só vem para quem pediu, com `{"cmd": "traces", "drivers": ["NOR", "VER"]}` (até 2 pilotos): por sigla, `{"current": ..., "previous": ...}` com a volta atual (até o instante mostrado) e a anterior. Cada uma é `{"lap", "d", "speed", "throttle", "brake"}`: listas alinhadas, `d` em metros desde a linha (integrada pela velocidade, como o FastF1), `brake` 1/0. `null` enquanto não houver uma passagem pela linha observada de verdade (a primeira leitura de voltas, ao conectar, não conta).
+- `source.mode`: `"live"` (feed ao vivo) ou `"replay"` (simulação). Na simulação o site pode mandar comandos pelo mesmo WebSocket: `{"cmd": "pause", "value": true}`, `{"cmd": "speed", "value": 16}` (1, 2, 4, 8, 16 ou 32) e `{"cmd": "seek", "value": 3600}` (segundos desde o início da gravação).
+
+### Gravações (`live/recordings/*.jsonl.gz`)
+
+Feed bruto da sessão, para reproduzir depois. Fica fora do git (dados do feed oficial, uso pessoal).
+
+```
+{"meta": {"source": "archive", "path": "2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/", "recordedAt": "..."}}
+[1794154180.123, "TimingData", {"Lines": {"1": {"Position": "1"}}}]
+[1794154180.402, "Position", {"Position": [{"Timestamp": "...", "Entries": {"1": {"Status": "OnTrack", "X": -3468, "Y": 1204, "Z": 0}}}]}]
+```
+
+- Uma linha JSON por mensagem: `[epoch_utc, tópico, dados]`, em ordem de tempo. Os tópicos `.z` (`Position`, `CarData`) já estão descomprimidos e sem o sufixo.
+- Os dados são exatamente os do feed: o primeiro valor de cada tópico é o estado completo e os seguintes são mudanças parciais (aplicadas por `merge` em `live/state.py`). X/Y vêm em décimos de metro.
+- Uma corrida completa ocupa ~12 MB.
