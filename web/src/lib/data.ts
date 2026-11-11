@@ -1,4 +1,14 @@
-import type { Calendar, DataIndex, DriverResult, Lap, SessionMeta, Standings } from '../types/data'
+import type {
+  Calendar,
+  DataIndex,
+  DriverPositions,
+  DriverResult,
+  Lap,
+  SessionMeta,
+  Standings,
+  Track,
+  TrackStatusChange,
+} from '../types/data'
 
 const BASE = `${import.meta.env.BASE_URL}data`
 
@@ -8,12 +18,31 @@ async function getJson<T>(path: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
+/**
+ * Lê um .json.gz. Alguns servidores já descomprimem (Content-Encoding: gzip) e outros
+ * entregam os bytes crus (GitHub Pages, Vite); por isso checamos a assinatura do gzip.
+ */
+async function getJsonGz<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}/${path}`)
+  if (!res.ok) throw new Error(`Falha ao carregar ${path} (HTTP ${res.status})`)
+  const bytes = new Uint8Array(await res.arrayBuffer())
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))
+    return JSON.parse(await new Response(stream).text()) as T
+  }
+  return JSON.parse(new TextDecoder().decode(bytes)) as T
+}
+
 export const loadIndex = () => getJson<DataIndex>('index.json')
 export const loadCalendar = (year: number) => getJson<Calendar>(`${year}/calendar.json`)
 export const loadStandings = (year: number) => getJson<Standings>(`${year}/standings.json`)
 export const loadMeta = (path: string) => getJson<SessionMeta>(`${path}/meta.json`)
 export const loadResults = (path: string) => getJson<DriverResult[]>(`${path}/results.json`)
 export const loadLaps = (path: string) => getJson<Lap[]>(`${path}/laps.json`)
+export const loadTrack = (path: string) => getJson<Track>(`${path}/track.json`)
+export const loadTrackStatus = (path: string) => getJson<TrackStatusChange[]>(`${path}/track_status.json`)
+export const loadPositions = (path: string, driver: string) =>
+  getJsonGz<DriverPositions>(`${path}/positions/${driver}.json.gz`)
 
 /** 83.456 -> "1:23.456" */
 export function formatLapTime(seconds: number | null): string {

@@ -427,3 +427,337 @@ code {
     display: none;
   }
 }
+
+/* Abas internas da sessão */
+.subtabs {
+  display: flex;
+  gap: 4px;
+  margin: -6px 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.subtabs a,
+.subtabs span {
+  padding: 8px 12px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.subtabs a:hover {
+  color: var(--text);
+}
+
+.subtabs a.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.subtabs .disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Replay */
+.replay-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(250px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.map-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.map-hud {
+  position: absolute;
+  inset: 12px 14px auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.map-hud strong {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.flag {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+
+.flag-green {
+  color: var(--up);
+}
+
+.flag-yellow,
+.flag-sc,
+.flag-vsc,
+.flag-vsc_ending {
+  color: #d9a400;
+}
+
+.flag-red {
+  color: var(--accent);
+}
+
+.flag-chequered,
+.flag-unknown {
+  color: var(--text);
+}
+
+.track-map {
+  display: block;
+  width: 100%;
+  max-height: 68vh;
+}
+
+.track-outer,
+.track-inner {
+  fill: none;
+  stroke-linejoin: round;
+}
+
+.track-outer {
+  stroke: var(--border);
+}
+
+.track-inner {
+  stroke: var(--bg);
+}
+
+.finish-line {
+  stroke: var(--text);
+}
+
+.corner-label {
+  fill: var(--muted);
+  text-anchor: middle;
+  dominant-baseline: middle;
+  opacity: 0.7;
+}
+
+.car {
+  cursor: pointer;
+}
+
+.car-dot {
+  stroke: var(--surface);
+}
+
+.car-label {
+  fill: var(--text);
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 6px;
+}
+
+.tower {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.tower li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.tower li:hover {
+  background: var(--bg);
+}
+
+.tower li.selected {
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.tower li.out {
+  opacity: 0.45;
+}
+
+.t-pos {
+  width: 20px;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tower .team-bar {
+  height: 16px;
+}
+
+.t-driver {
+  font-weight: 700;
+}
+
+.t-spacer {
+  flex: 1;
+}
+
+.t-gap {
+  min-width: 64px;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pit-tag {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--text);
+  color: var(--bg);
+}
+
+.fin-tag {
+  font-size: 12px;
+}
+
+.tyre {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.tyre.soft {
+  color: #e8002d;
+}
+
+.tyre.medium {
+  color: #f5c400;
+}
+
+.tyre.hard {
+  color: var(--text);
+}
+
+.tyre.inter {
+  color: #43b02a;
+}
+
+.tyre.wet {
+  color: #0067ad;
+}
+
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.replay-controls input[type='range'] {
+  flex: 1;
+  min-width: 160px;
+  accent-color: var(--accent);
+}
+
+.icon-btn,
+.speeds button {
+  font: inherit;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+}
+
+.icon-btn.play {
+  width: 44px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.clock {
+  min-width: 64px;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.speeds {
+  display: flex;
+  gap: 4px;
+}
+
+.speeds button {
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.speeds button.active {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+@media (max-width: 860px) {
+  /* no celular: mapa, controles e só depois a torre */
+  .replay {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .replay-grid {
+    display: contents;
+  }
+
+  .map-card {
+    order: 1;
+    padding-top: 40px;
+  }
+
+  .replay-controls {
+    order: 2;
+    margin-top: 0;
+  }
+
+  .tower {
+    order: 3;
+  }
+
+  .replay .foot {
+    order: 4;
+  }
+}

@@ -1,4 +1,7 @@
-"""Exporta resultados e voltas de uma sessão de F1 para data/{ano}/{rodada}-{local}/{sessao}/.
+"""Exporta uma sessão de F1 para data/{ano}/{rodada}-{local}/{sessao}/.
+
+Gera resultados, voltas e, para corridas e sprints, os dados do replay
+(traçado, posições X/Y por piloto e bandeiras).
 
 Uso: python export_session.py 2024 Monza R
 """
@@ -11,6 +14,7 @@ from pathlib import Path
 import fastf1
 import pandas as pd
 
+import replay
 from common import (
     DATA_DIR,
     SCHEMA_VERSION,
@@ -23,7 +27,11 @@ from common import (
     to_str,
     update_index,
     write_json,
+    write_json_gz,
 )
+
+# Sessões com replay (largada única e ordem de corrida)
+REPLAY_SESSIONS = {"R", "S"}
 
 # Nome da sessão no FastF1 -> código curto usado no caminho dos arquivos
 SESSION_CODES = {
@@ -74,11 +82,16 @@ def build_laps(session) -> list[dict]:
             "tyreLife": to_int(lap.get("TyreLife")),
             "pitIn": not pd.isna(lap.get("PitInTime")),
             "pitOut": not pd.isna(lap.get("PitOutTime")),
+            # tempos de sessão (s), mesma base do replay
+            "startTime": replay.seconds_or_none(lap.get("LapStartTime")),
+            "endTime": replay.seconds_or_none(lap.get("Time")),
+            "pitInTime": replay.seconds_or_none(lap.get("PitInTime")),
+            "pitOutTime": replay.seconds_or_none(lap.get("PitOutTime")),
         })
     return rows
 
 
-def build_meta(session, session_code: str, slug: str) -> dict:
+def build_meta(session, session_code: str, slug: str, replay_info: dict | None = None) -> dict:
     event = session.event
     session_date = session.date
     return {
@@ -98,17 +111,35 @@ def build_meta(session, session_code: str, slug: str) -> dict:
         ),
         "generatedAt": now_iso(),
         "fastf1Version": fastf1.__version__,
+        "replay": replay_info,
     }
+
+
+def export_replay(session, out: Path) -> dict:
+    """Grava track.json, track_status.json e positions/{DRV}.json.gz. Retorna o resumo para o meta.json."""
+    start, end = replay.replay_window(session)
+    write_json(out / "track.json", replay.build_track(session))
+    write_json(out / "track_status.json", replay.build_track_status(session))
+
+    positions = replay.build_positions(session, start, end)
+    sizes = []
+    for abbr, data in positions.items():
+        sizes.append(write_json_gz(out / "positions" / f"{abbr}.json.gz", data))
+    print(
+        f"Replay: {len(positions)} pilotos, {end - start:.0f} s a {replay.REPLAY_HZ} Hz, "
+        f"{sum(sizes) / 1024:.0f} KB no total ({max(sizes) / 1024:.0f} KB no maior arquivo)"
+    )
+    return {"start": start, "end": end, "hz": replay.REPLAY_HZ, "drivers": sorted(positions)}
 
 
 def export_session(year: int, gp: str, ident: str, data_dir: Path = DATA_DIR) -> Path:
     setup_cache()
 
     session = fastf1.get_session(year, gp, ident)
-    # Fase 0: só resultados e voltas. Telemetria entra na fase 2/3.
-    session.load(laps=True, telemetry=False, weather=False, messages=False)
-
     session_code = SESSION_CODES.get(session.name, slugify(session.name).upper())
+    with_replay = session_code in REPLAY_SESSIONS
+    session.load(laps=True, telemetry=with_replay, weather=False, messages=False)
+
     slug = f"{int(session.event['RoundNumber']):02d}-{slugify(session.event['Location'])}"
     out = data_dir / str(year) / slug / session_code
     out.mkdir(parents=True, exist_ok=True)
@@ -117,7 +148,8 @@ def export_session(year: int, gp: str, ident: str, data_dir: Path = DATA_DIR) ->
     laps = build_laps(session)
     write_json(out / "results.json", results)
     write_json(out / "laps.json", laps)
-    write_json(out / "meta.json", build_meta(session, session_code, slug))
+    replay_info = export_replay(session, out) if with_replay else None
+    write_json(out / "meta.json", build_meta(session, session_code, slug, replay_info))
     update_index(data_dir)
 
     print(f"OK: {out.relative_to(data_dir.parent)} ({len(results)} pilotos, {len(laps)} voltas)")

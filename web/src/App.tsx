@@ -54,7 +54,7 @@ export default function App() {
       {error && <p className="notice error">{error}</p>}
       {index && route.view === 'standings' && year && <StandingsView year={year} index={index} />}
       {index && route.view === 'calendar' && year && <CalendarView year={year} index={index} />}
-      {index && route.view === 'session' && <SessionView path={route.path} index={index} />}
+      {index && route.view === 'session' && <SessionView path={route.path} tab={route.tab ?? 'results'} index={index} />}
       {index && route.view !== 'session' && !year && (
         <p className="notice">
           Nenhuma temporada exportada. Rode <code>python export_standings.py 2026</code> em <code>pipeline/</code>.

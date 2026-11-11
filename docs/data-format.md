@@ -22,8 +22,15 @@ data/
     └── {rodada}-{local}/{sessao}/  # dados de uma sessão (FastF1)
         ├── meta.json
         ├── results.json
-        └── laps.json
+        ├── laps.json
+        ├── track.json              # traçado da pista (só R e S)
+        ├── track_status.json       # bandeiras e safety car (só R e S)
+        └── positions/{DRV}.json.gz # posições X/Y para o replay (só R e S)
 ```
+
+**Base de tempo das sessões:** `startTime`, `endTime`, `pitInTime`, `pitOutTime`, `track_status.json` e o replay usam **segundos desde o início da sessão** (o `SessionTime` do FastF1). Isso permite cruzar voltas, bandeiras e posições sem conversão.
+
+**Coordenadas:** X/Y em **metros**, no sistema do live timing da F1 (eixo Y para cima). Para desenhar na orientação oficial, gire os pontos por `track.json.rotation` graus e inverta o Y para a tela.
 
 - `{rodada}-{local}`: rodada com 2 dígitos + local do GP sem acento, ex.: `16-monza`, `21-sao-paulo`. A rodada evita colisão quando o mesmo circuito recebe duas provas no ano (ex.: 2020).
 - `{sessao}`: `FP1`, `FP2`, `FP3`, `SQ` (sprint quali/shootout), `S` (sprint), `Q`, `R`.
@@ -109,6 +116,10 @@ As cores vêm do arquivo de constantes do FastF1 (`fastf1/plotting/constants.jso
 | `sessionDate` | string \| null | Início da sessão (ISO 8601) |
 | `generatedAt` | string | Data do export (ISO 8601, UTC) |
 | `fastf1Version` | string | Versão do FastF1 usada |
+| `replay` | object \| null | `null` quando a sessão não tem replay (hoje só `R` e `S` têm) |
+| `replay.start`, `replay.end` | float | Janela do replay em segundos de sessão: da largada (início da volta 1) a 60 s depois do último carro fechar a volta |
+| `replay.hz` | int | Amostras por segundo das posições (4) |
+| `replay.drivers` | string[] | Pilotos com arquivo em `positions/` |
 
 ## `results.json`
 
@@ -142,7 +153,50 @@ Uma linha por volta de cada piloto.
 | `stint` | int \| null | Número do stint |
 | `tyreLife` | int \| null | Voltas no jogo de pneus |
 | `pitIn`, `pitOut` | bool | Entrou ou saiu dos boxes nesta volta |
+| `startTime`, `endTime` | float \| null | Início e fim da volta, em segundos de sessão |
+| `pitInTime`, `pitOutTime` | float \| null | Entrada e saída dos boxes, em segundos de sessão |
 
-## Próximos (fases 2–3)
+## `track.json`
 
-`telemetry/{DRV}.json.gz` (por piloto, com downsampling de ~4–10 Hz) e posições X/Y para o mapa ainda não são exportados.
+Traçado tirado da volta mais rápida da sessão, com um ponto a cada 10 m.
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `rotation` | float | Rotação (graus) para a orientação oficial do mapa. `0` se as informações do circuito não estiverem disponíveis |
+| `lapLength` | float | Comprimento da volta de referência (m) |
+| `referenceLap` | object | `{driver, lap}` da volta usada |
+| `outline` | `[x, y][]` | Pontos do traçado em metros. O primeiro ponto fica na linha de chegada |
+| `corners` | array | Curvas: `{number, letter, x, y, angle, distance}`. `angle` posiciona o rótulo; `distance` é em metros desde a linha. Pode vir vazio |
+
+## `track_status.json`
+
+Mudanças de estado da pista, em ordem. O estado vale até a próxima mudança.
+
+```json
+[{"time": 792.826, "status": "green", "code": "1", "message": "AllClear"}]
+```
+
+| `status` | `code` | Significado |
+|---|---|---|
+| `green` | 1 | Pista livre |
+| `yellow` | 2 | Bandeira amarela |
+| `sc` | 4 | Safety car |
+| `red` | 5 | Bandeira vermelha |
+| `vsc` | 6 | Safety car virtual |
+| `vsc_ending` | 7 | Fim do safety car virtual |
+
+## `positions/{DRV}.json.gz`
+
+Um arquivo por piloto, em JSON comprimido com gzip (o front descomprime com `DecompressionStream`).
+
+```json
+{"driver": "LEC", "start": 3350.494, "hz": 4, "x": [812, 805, ...], "y": [-203, -190, ...]}
+```
+
+- A amostra `i` corresponde ao tempo de sessão `start + i / hz`. Todos os pilotos usam a mesma grade (`meta.replay`).
+- `x`, `y` são inteiros em metros. `null` quando não há dado real a menos de 3 s (carro na garagem, abandono, falha de transmissão).
+- Monza 2024 (corrida, 77 min): cerca de 40 KB por piloto, 842 KB no total.
+
+## Próximos (fase 3)
+
+`telemetry/{DRV}.json.gz` (velocidade, acelerador, freio, marcha e DRS por volta, alinhados por distância) ainda não é exportado.

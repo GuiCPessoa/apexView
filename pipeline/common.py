@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gzip
 import json
 import math
 import re
@@ -66,6 +67,15 @@ def write_json(path: Path, data: Any) -> None:
     # allow_nan=False garante JSON válido (sem NaN/Infinity)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, allow_nan=False, separators=(",", ":")))
+
+
+def write_json_gz(path: Path, data: Any) -> int:
+    """Grava JSON comprimido com gzip (mtime=0 para o arquivo não mudar à toa no git). Retorna o tamanho em bytes."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    raw = json.dumps(data, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()
+    payload = gzip.compress(raw, compresslevel=9, mtime=0)
+    path.write_bytes(payload)
+    return len(payload)
 
 
 def update_index(data_dir: Path = DATA_DIR) -> dict:

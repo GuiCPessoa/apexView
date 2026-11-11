@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react'
 export type Route =
   | { view: 'standings'; year: number | null }
   | { view: 'calendar'; year: number | null }
-  | { view: 'session'; path: string | null }
+  | { view: 'session'; path: string | null; tab?: SessionTab }
+
+export type SessionTab = 'results' | 'replay'
 
 export function parseRoute(hash: string): Route {
   const [view, ...rest] = hash.replace(/^#\/?/, '').split('/').filter(Boolean)
@@ -13,7 +15,11 @@ export function parseRoute(hash: string): Route {
     case 'calendario':
       return { view: 'calendar', year }
     case 'sessao':
-      return { view: 'session', path: rest.length >= 3 ? rest.join('/') : null }
+      return {
+        view: 'session',
+        path: rest.length >= 3 ? rest.slice(0, 3).join('/') : null,
+        tab: rest[3] === 'replay' ? 'replay' : 'results',
+      }
     default:
       return { view: 'standings', year }
   }
@@ -26,7 +32,7 @@ export function routeHref(route: Route): string {
     case 'calendar':
       return `#/calendario${route.year ? `/${route.year}` : ''}`
     case 'session':
-      return `#/sessao${route.path ? `/${route.path}` : ''}`
+      return `#/sessao${route.path ? `/${route.path}` : ''}${route.path && route.tab === 'replay' ? '/replay' : ''}`
   }
 }
 

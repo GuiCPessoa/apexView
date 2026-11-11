@@ -99,6 +99,15 @@ export interface SessionMeta {
   sessionDate: string | null
   generatedAt: string
   fastf1Version: string
+  replay: ReplayInfo | null
+}
+
+/** Janela do replay em segundos de sessão (SessionTime) */
+export interface ReplayInfo {
+  start: number
+  end: number
+  hz: number
+  drivers: string[]
 }
 
 /** Uma linha de results.json */
@@ -129,4 +138,46 @@ export interface Lap {
   tyreLife: number | null
   pitIn: boolean
   pitOut: boolean
+  // segundos de sessão, mesma base do replay
+  startTime: number | null
+  endTime: number | null
+  pitInTime: number | null
+  pitOutTime: number | null
+}
+
+/** track.json — coordenadas em metros */
+export interface Track {
+  rotation: number // graus
+  lapLength: number
+  referenceLap: { driver: string; lap: number }
+  outline: [number, number][]
+  corners: Corner[]
+}
+
+export interface Corner {
+  number: number
+  letter: string | null
+  x: number
+  y: number
+  angle: number
+  distance: number
+}
+
+export type TrackStatusCode = 'green' | 'yellow' | 'sc' | 'red' | 'vsc' | 'vsc_ending' | 'unknown'
+
+/** Uma linha de track_status.json */
+export interface TrackStatusChange {
+  time: number // segundos de sessão
+  status: TrackStatusCode
+  code: string
+  message: string | null
+}
+
+/** positions/{DRV}.json.gz — amostra i no tempo start + i / hz */
+export interface DriverPositions {
+  driver: string
+  start: number
+  hz: number
+  x: (number | null)[]
+  y: (number | null)[]
 }
