@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import unicodedata
 from collections.abc import Iterable, Iterator
 from datetime import datetime, timezone
 from pathlib import Path
@@ -68,7 +69,72 @@ def read(path: Path) -> tuple[dict, Iterator[Message]]:
     return meta, messages()
 
 
+def slug(label: str) -> str:
+    """'São Paulo / Corrida' -> 'sao-paulo-corrida' (seguro para nome de arquivo)."""
+    ascii_ = unicodedata.normalize("NFKD", label).encode("ascii", "ignore").decode()
+    out = "".join(c if c.isalnum() else "-" for c in ascii_.lower())
+    while "--" in out:
+        out = out.replace("--", "-")
+    return out.strip("-")
+
+
 def new_path(label: str) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    safe = "".join(c if c.isalnum() or c in "-_" else "-" for c in label).strip("-").lower()
-    return RECORDINGS_DIR / f"{stamp}-{safe or 'sessao'}.jsonl.gz"
+    return RECORDINGS_DIR / f"{stamp}-{slug(label) or 'sessao'}.jsonl.gz"
+
+
+SCAN_MESSAGES = 5000  # o SessionInfo vem logo no começo (gravação ao vivo e arquivo)
+
+
+def describe(path: Path) -> dict:
+    """Qual sessão está na gravação: lê o SessionInfo das primeiras mensagens."""
+    meta, messages = read(path)
+    info: dict = {}
+    for i, msg in enumerate(messages):
+        if msg.topic == "SessionInfo":
+            info = msg.data
+            break
+        if i >= SCAN_MESSAGES:
+            break
+    messages.close()
+    meeting = info.get("Meeting") or {}
+    start = info.get("StartDate")
+    return {
+        "file": path.name,
+        "path": info.get("Path") or meta.get("path"),
+        "meeting": meeting.get("Name"),
+        "session": info.get("Name"),
+        "type": info.get("Type"),
+        "year": int(start[:4]) if start else None,
+        "start": start,
+        "gmtOffset": info.get("GmtOffset"),
+        "source": meta.get("source"),
+        "size": path.stat().st_size,
+    }
+
+
+_described: dict[tuple, dict] = {}
+
+
+def list_recordings(folder: Path = RECORDINGS_DIR) -> list[dict]:
+    """Gravações da pasta (mais recentes primeiro), com a sessão de cada uma."""
+    out = []
+    for path in folder.rglob("*.jsonl.gz"):
+        stat = path.stat()
+        key = (str(path), stat.st_mtime, stat.st_size)
+        if key not in _described:
+            try:
+                _described[key] = {**describe(path), "file": str(path.relative_to(folder))}
+            except (OSError, ValueError):
+                continue
+        out.append(_described[key])
+    out.sort(key=lambda r: (r["start"] or "", r["size"]), reverse=True)
+    return out
+
+
+def find_recording(session_path: str, folder: Path = RECORDINGS_DIR) -> Path | None:
+    """Melhor gravação de uma sessão do arquivo (a maior, se houver mais de uma)."""
+    hits = [r for r in list_recordings(folder) if r["path"] == session_path]
+    if not hits:
+        return None
+    return folder / max(hits, key=lambda r: r["size"])["file"]

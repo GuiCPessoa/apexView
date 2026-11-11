@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LiveSnapshot } from '../types/live'
-import { DelayBuffer, formatLiveGap, tracePath, withOutline } from './live'
+import { DelayBuffer, formatLiveGap, sourceKey, tracePath, withOutline } from './live'
 
 describe('DelayBuffer', () => {
   it('devolve o valor de alguns segundos atrás', () => {
@@ -51,5 +51,14 @@ describe('tracePath', () => {
 
   it('degrau para canais liga/desliga e limita fora da escala', () => {
     expect(tracePath([0, 1000, 3000], [0, 1, 2], 2000, 0, 1, 100, 10, true)).toBe('M0.0,10.0H50.0V0.0H100.0V0.0')
+  })
+})
+
+describe('sourceKey', () => {
+  it('muda quando troca a sessão ou o modo', () => {
+    const snap = (mode: string, selected: string | null) => ({ source: { mode, selected } }) as unknown as LiveSnapshot
+    expect(sourceKey(snap('replay', '2026/a/'))).toBe(sourceKey(snap('replay', '2026/a/')))
+    expect(sourceKey(snap('replay', '2026/a/'))).not.toBe(sourceKey(snap('replay', '2026/b/')))
+    expect(sourceKey(snap('live', null))).not.toBe(sourceKey(snap('idle', null)))
   })
 })

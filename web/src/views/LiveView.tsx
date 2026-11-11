@@ -2,22 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Card from '../components/Card'
 import { formatLapTime, loadTrack } from '../lib/data'
 import { dimmed, toggleFocus } from '../lib/focus'
-import { LIVE_URL, formatLiveGap, tracePath, useLiveFeed, type LiveStatus } from '../lib/live'
+import { LIVE_URL, formatLiveGap, sourceKey, tracePath, useLiveFeed, type LiveStatus } from '../lib/live'
 import { similarColors } from '../lib/telemetry'
 import { TRACK_STATUS_LABEL, formatClock, makeProjection } from '../lib/replay'
 import { COMPOUND } from '../lib/tyres'
 import type { DataIndex, Track } from '../types/data'
-import type { LiveDriver, LiveSnapshot, LiveTimed } from '../types/live'
+import type { LiveCatalog, LiveDriver, LiveScheduled, LiveSnapshot, LiveTimed } from '../types/live'
 
 const DELAYS = [0, 5, 10, 15, 20, 30, 45, 60]
 const SPEEDS = [1, 4, 16, 32]
 
 const START_HELP = `cd live && source .venv/bin/activate
-python server.py live
-
-# fora do fim de semana de GP, simule com uma corrida gravada:
-python record_archive.py 2026 20 R
-python server.py replay recordings/2026-20-r.jsonl.gz`
+python server.py`
 
 const SESSION_NAME: Record<string, string> = {
   Race: 'Corrida',
@@ -35,7 +31,8 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
   const [delay, setDelay] = useState(0)
   const [focus, setFocus] = useState<string[]>([])
   const [gapMode, setGapMode] = useState<'gap' | 'interval'>('gap')
-  const { status, snapshot, send, requestTraces } = useLiveFeed(delay)
+  const [choosing, setChoosing] = useState(false)
+  const { status, snapshot, send, requestTraces, catalog, requestCatalog } = useLiveFeed(delay)
   const onToggle = useCallback((d: string) => setFocus((f) => toggleFocus(f, d)), [])
   const track = useExportedTrack(index, snapshot)
 
@@ -45,10 +42,18 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
   const hasSession = s.session.name != null
   const isRace = s.session.type === 'Race'
   const replay = s.source.mode === 'replay'
+  const idle = s.source.mode === 'idle'
+  const canChoose = s.source.canChoose ?? false
+  const showChooser = canChoose && (choosing || idle)
+  const choose = (path: string) => {
+    send({ cmd: 'select', path })
+    setChoosing(false)
+  }
 
   return (
     <section className="live">
       {s.source.error && <p className="notice error">{s.source.error}</p>}
+      {s.source.loading && <DownloadNotice loading={s.source.loading} />}
       {status !== 'open' && <p className="notice warn">Conexão com o backend perdida; reconectando…</p>}
 
       <div className="hero">
@@ -61,12 +66,15 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
             )}{' '}
             {hasSession ? (SESSION_NAME[s.session.name ?? ''] ?? s.session.name) : ''}
           </span>
-          <h1>{s.session.meeting ?? 'Sem sessão no momento'}</h1>
+          <h1>{s.session.meeting ?? (idle ? 'Escolha uma sessão' : 'Sem sessão no momento')}</h1>
           <p>
             {hasSession
               ? [s.session.circuit, s.session.country, statusLabel(s.session.status)].filter(Boolean).join(' · ')
-              : 'O feed está conectado, mas nenhuma sessão está acontecendo agora.'}
+              : idle
+                ? 'Nenhuma gravação ainda. Escolha abaixo uma sessão do arquivo da F1 para simular.'
+                : 'O feed está conectado, mas nenhuma sessão está acontecendo agora.'}
           </p>
+          {s.source.mode !== 'live' && s.source.nextLive && <NextLive next={s.source.nextLive} />}
         </div>
         <div className="hero-stats">
           {isRace && s.lap.current != null && (
@@ -108,10 +116,22 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
         </div>
       </div>
 
-      {replay && <ReplayBar s={s} send={send} />}
+      {replay && <ReplayBar s={s} send={send} onChoose={canChoose ? () => setChoosing((c) => !c) : undefined} choosing={showChooser} />}
+
+      {showChooser && (
+        <div className="dash">
+          <SessionChooser
+            s={s}
+            catalog={catalog}
+            requestCatalog={requestCatalog}
+            onSelect={choose}
+            onClose={idle ? undefined : () => setChoosing(false)}
+          />
+        </div>
+      )}
 
       {hasSession && (
-        <div className="dash">
+        <div className="dash" key={sourceKey(s)}>
           <LiveMap s={s} track={track} focus={focus} onToggle={onToggle} />
           <Card
             title="Torre"
@@ -197,7 +217,17 @@ function Offline({ status }: { status: LiveStatus }) {
 
 // ---------- Controles da simulação ----------
 
-function ReplayBar({ s, send }: { s: LiveSnapshot; send: (cmd: Record<string, unknown>) => void }) {
+function ReplayBar({
+  s,
+  send,
+  onChoose,
+  choosing,
+}: {
+  s: LiveSnapshot
+  send: (cmd: Record<string, unknown>) => void
+  onChoose?: () => void
+  choosing: boolean
+}) {
   const [seek, setSeek] = useState<number | null>(null)
   const elapsed = s.source.elapsed ?? 0
   const duration = s.source.duration ?? 0
@@ -208,7 +238,13 @@ function ReplayBar({ s, send }: { s: LiveSnapshot; send: (cmd: Record<string, un
   }
   return (
     <div className="replay-bar">
-      <span className="muted">Simulação de {s.source.recording}</span>
+      {onChoose ? (
+        <button className={`chip choose-btn ${choosing ? 'on' : ''}`} onClick={onChoose} aria-expanded={choosing}>
+          Trocar sessão
+        </button>
+      ) : (
+        <span className="muted">Simulação de {s.source.recording}</span>
+      )}
       <button
         className="icon-btn play"
         onClick={() => send({ cmd: 'pause', value: !s.source.paused })}
@@ -240,6 +276,124 @@ function ReplayBar({ s, send }: { s: LiveSnapshot; send: (cmd: Record<string, un
         ))}
       </div>
     </div>
+  )
+}
+
+// ---------- Escolha da sessão ----------
+
+const dateTime = (iso: string, opts: Intl.DateTimeFormatOptions) => new Date(iso).toLocaleString('pt-BR', opts)
+
+/** No modo automático: quando o ao vivo liga sozinho. */
+function NextLive({ next }: { next: LiveScheduled }) {
+  const when = dateTime(next.start, { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return (
+    <p className="next-live">
+      <span className="live-badge">Ao vivo automático</span> {next.label}, {when}
+    </p>
+  )
+}
+
+function DownloadNotice({ loading }: { loading: NonNullable<LiveSnapshot['source']['loading']> }) {
+  return (
+    <div className="notice download">
+      <span>
+        Baixando <b>{loading.label}</b> do arquivo da F1…
+      </span>
+      <progress max={loading.total} value={loading.done} />
+      <span className="muted mono">
+        {loading.done}/{loading.total}
+      </span>
+    </div>
+  )
+}
+
+/** Lista as sessões de um ano (as já baixadas e as do arquivo da F1) para simular. */
+function SessionChooser({
+  s,
+  catalog,
+  requestCatalog,
+  onSelect,
+  onClose,
+}: {
+  s: LiveSnapshot
+  catalog: LiveCatalog | null
+  requestCatalog: (year: number | null) => void
+  onSelect: (path: string) => void
+  onClose?: () => void
+}) {
+  const selected = s.source.selected ?? null
+  const [year, setYear] = useState(() => (selected ? Number(selected.slice(0, 4)) : new Date().getFullYear()))
+  // pede de novo quando a sessão muda (uma recém-baixada passa a constar como gravada)
+  useEffect(() => {
+    requestCatalog(year)
+  }, [year, selected, requestCatalog])
+  const data = catalog?.year === year ? catalog : null
+  const years = catalog?.years ?? [year]
+  const busy = s.source.loading != null
+
+  return (
+    <Card
+      title="Escolher sessão"
+      span={12}
+      className="chooser"
+      aside={
+        <div className="chooser-aside">
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Temporada">
+            {years.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+          {onClose && (
+            <button className="icon-btn" onClick={onClose} aria-label="Fechar">
+              ✕
+            </button>
+          )}
+        </div>
+      }
+    >
+      {data?.error && <p className="notice warn">{data.error}</p>}
+      {!data ? (
+        <p className="muted loading">Carregando as sessões de {year}…</p>
+      ) : data.meetings.length === 0 ? (
+        <p className="muted">Nenhuma sessão de {year} disponível.</p>
+      ) : (
+        <ol className="chooser-list">
+          {[...data.meetings].reverse().map((m, i) => (
+            <li key={`${m.name}-${i}`}>
+              <div className="chooser-gp">
+                <span className="muted mono">{m.number ? `R${m.number}` : ''}</span>
+                <strong>{m.name}</strong>
+                <span className="muted">{m.location}</span>
+              </div>
+              <div className="chooser-sessions">
+                {m.sessions.map((x) => {
+                  const current = x.path === selected
+                  const when = x.start ? dateTime(x.start, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''
+                  return (
+                    <button
+                      key={x.path}
+                      className={`chip ${current ? 'on current' : ''} ${x.recorded ? 'recorded' : 'ghost'}`}
+                      disabled={busy || current}
+                      onClick={() => onSelect(x.path)}
+                      title={`${when}${x.recorded ? ' · já baixada' : ' · baixa do arquivo da F1'}`}
+                    >
+                      {!x.recorded && <span aria-hidden="true">↓</span>}
+                      {SESSION_NAME[x.name ?? ''] ?? x.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="foot">
+        Sessões com ↓ ainda não foram baixadas: ao escolher, o servidor baixa do arquivo da F1 (cerca de 1 min) e guarda em
+        live/recordings/. No fim de semana de GP, o ao vivo entra sozinho no horário da sessão.
+      </p>
+    </Card>
   )
 }
 

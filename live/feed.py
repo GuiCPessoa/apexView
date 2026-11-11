@@ -21,9 +21,9 @@ import os
 import sys
 import time
 import zlib
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -187,23 +187,64 @@ def _get(path: str, timeout: int = 120) -> str:
     return resp.content.decode("utf-8-sig")
 
 
+SESSION_CODES = {"R": "Race", "Q": "Qualifying", "S": "Sprint", "SQ": "Sprint Qualifying",
+                 "FP1": "Practice 1", "FP2": "Practice 2", "FP3": "Practice 3"}
+
+
+def _to_utc(local: str | None, offset: str | None) -> str | None:
+    """'2026-11-08T14:00:00' + '-03:00:00' -> '2026-11-08T17:00:00Z'."""
+    if not local:
+        return None
+    try:
+        t = datetime.fromisoformat(local)
+        sign = -1 if (offset or "").startswith("-") else 1
+        h, m, s = (int(x) for x in (offset or "0:0:0").lstrip("+-").split(":"))
+        t -= sign * timedelta(hours=h, minutes=m, seconds=s)
+        return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return None
+
+
+def archive_index(year: int) -> list[dict]:
+    """GPs e sessões do ano que já estão no arquivo (só as que já aconteceram), em ordem do calendário."""
+    index = json.loads(_get(f"{year}/Index.json", timeout=30))
+    meetings = []
+    for m in index.get("Meetings", []):
+        sessions = [
+            {
+                "name": s.get("Name"),
+                "type": s.get("Type"),
+                "path": s["Path"],
+                "start": _to_utc(s.get("StartDate"), s.get("GmtOffset")),
+            }
+            for s in m.get("Sessions", [])
+            if s.get("Path")
+        ]
+        if sessions:
+            meetings.append({
+                "number": m.get("Number"),
+                "name": m.get("Name"),
+                "location": m.get("Location"),
+                "country": (m.get("Country") or {}).get("Name"),
+                "sessions": sessions,
+            })
+    return meetings
+
+
 def find_session_path(year: int, meeting: str | int, session: str) -> str:
     """Caminho da sessão no arquivo, ex.: '2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/'.
 
     `meeting` é o número da rodada ou parte do nome do GP; `session` é o nome
     ('Race', 'Qualifying', 'Sprint', 'Practice 1'...) ou o código (R, Q, S, SQ, FP1...).
     """
-    codes = {"R": "Race", "Q": "Qualifying", "S": "Sprint", "SQ": "Sprint Qualifying",
-             "FP1": "Practice 1", "FP2": "Practice 2", "FP3": "Practice 3"}
-    session = codes.get(session.upper(), session)
-    index = json.loads(_get(f"{year}/Index.json"))
-    for m in index.get("Meetings", []):
-        hit = m.get("Number") == meeting if isinstance(meeting, int) else str(meeting).lower() in m.get("Name", "").lower()
+    session = SESSION_CODES.get(session.upper(), session)
+    for m in archive_index(year):
+        hit = m["number"] == meeting if isinstance(meeting, int) else str(meeting).lower() in (m["name"] or "").lower()
         if not hit:
             continue
-        for s in m.get("Sessions", []):
-            if s.get("Name", "").lower() == session.lower() and s.get("Path"):
-                return s["Path"]
+        for s in m["sessions"]:
+            if (s["name"] or "").lower() == session.lower():
+                return s["path"]
     raise LookupError(f"Sessão não encontrada no arquivo: {year} {meeting} {session}")
 
 
@@ -212,22 +253,38 @@ def _parse_offset(text: str) -> float:
     return int(h) * 3600 + int(m) * 60 + float(s)
 
 
-def download_archive(path: str, topics: list[str] = TOPICS) -> Iterator[Message]:
+def download_archive(
+    path: str,
+    topics: list[str] = TOPICS,
+    progress: Callable[[int, int], None] | None = None,
+) -> Iterator[Message]:
     """Feed bruto de uma sessão passada, em ordem de tempo.
 
     Cada linha do arquivo traz o tempo desde o início da transmissão; o horário UTC
     vem de calibrar esse tempo com os carimbos das amostras de posição.
+    `progress(baixados, total)` é chamado a cada tópico.
     """
     entries: list[tuple[float, str, object]] = []
-    for topic in topics:
+    for i, topic in enumerate(topics):
+        if progress:
+            progress(i, len(topics))
         log.info("Baixando %s…", topic)
-        text = _get(f"{path}{topic}.jsonStream")
+        try:
+            text = _get(f"{path}{topic}.jsonStream")
+        except requests.HTTPError as exc:
+            # nem toda sessão tem todos os tópicos (ex.: LapCount só existe em corrida e sprint)
+            if exc.response is not None and exc.response.status_code in (403, 404):
+                log.info("Sessão sem %s; seguindo sem ele", topic)
+                continue
+            raise
         for line in text.splitlines():
             if len(line) < 13:
                 continue
             offset, payload = line[:12], line[12:]
             entries.append((_parse_offset(offset), topic, json.loads(payload)))
         time.sleep(0.5)  # gentileza com o servidor
+    if progress:
+        progress(len(topics), len(topics))
     entries.sort(key=lambda e: e[0])
 
     base = _utc_base(entries)

@@ -252,7 +252,10 @@ O backend local (`live/server.py`) não grava arquivos em `data/`: ele manda **s
    "speed": 298, "gear": 7, "rpm": 11200, "throttle": 100, "brake": 0, "drs": false, ...}],
  "raceControl": [{"utc": "2026-11-08T18:43:45", "lap": 71, "category": "Flag", "flag": "YELLOW", "message": "..."}],
  "outline": [[x, y], ...],
- "source": {"mode": "replay", "speed": 4, "paused": false, "elapsed": 6000.0, "duration": 9600.6}}
+ "source": {"mode": "replay", "error": null, "auto": true, "canChoose": true,
+   "selected": "2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/", "loading": null,
+   "liveSession": null, "nextLive": {"label": "Las Vegas Grand Prix · Treino 1", "event": "Las Vegas Grand Prix", "code": "FP1", "start": "2026-11-20T00:30:00Z"},
+   "recording": "2026-20-r.jsonl.gz", "speed": 4, "paused": false, "elapsed": 6000.0, "duration": 9600.6}}
 ```
 
 - `time` é o horário do feed (epoch UTC, s). As posições `x`, `y` (metros) são interpoladas 2 s atrás desse horário, para ficarem suaves entre as amostras; os canais do carro (`speed`, `gear`, `rpm`, `throttle`, `brake`, `drs`) usam o mesmo instante, para casar com o mapa.
@@ -260,7 +263,22 @@ O backend local (`live/server.py`) não grava arquivos em `data/`: ele manda **s
 - `lastLap`, `bestLap` e `sectors` têm `best`: `"overall"` (roxo, melhor da sessão) ou `"personal"` (verde, melhor do piloto).
 - `outline` é o traçado montado com uma volta limpa de algum carro (`null` até existir). Só vai no snapshot quando muda; quando a chave falta, vale o último recebido.
 - `traces` só vem para quem pediu, com `{"cmd": "traces", "drivers": ["NOR", "VER"]}` (até 2 pilotos): por sigla, `{"current": ..., "previous": ...}` com a volta atual (até o instante mostrado) e a anterior. Cada uma é `{"lap", "d", "speed", "throttle", "brake"}`: listas alinhadas, `d` em metros desde a linha (integrada pela velocidade, como o FastF1), `brake` 1/0. `null` enquanto não houver uma passagem pela linha observada de verdade (a primeira leitura de voltas, ao conectar, não conta).
-- `source.mode`: `"live"` (feed ao vivo) ou `"replay"` (simulação). Na simulação o site pode mandar comandos pelo mesmo WebSocket: `{"cmd": "pause", "value": true}`, `{"cmd": "speed", "value": 16}` (1, 2, 4, 8, 16 ou 32) e `{"cmd": "seek", "value": 3600}` (segundos desde o início da gravação).
+- `source.mode`: `"live"` (feed ao vivo), `"replay"` (simulação) ou `"idle"` (sem gravação, esperando a escolha). Na simulação o site pode mandar comandos pelo mesmo WebSocket: `{"cmd": "pause", "value": true}`, `{"cmd": "speed", "value": 16}` (1, 2, 4, 8, 16 ou 32) e `{"cmd": "seek", "value": 3600}` (segundos desde o início da gravação).
+- `source.auto`: o servidor está no modo automático (liga o ao vivo no horário das sessões do `calendar.json`). `nextLive` é a próxima sessão em que isso acontece e `liveSession`, a sessão do calendário durante o ao vivo.
+- `source.canChoose`: fora do ao vivo, o site pode trocar a sessão com `{"cmd": "select", "path": "2026/…_Grand_Prix/…_Qualifying/"}` (caminho do arquivo da F1). Se ainda não houver gravação dela, o servidor baixa e mostra o progresso em `loading` (`{"path", "label", "done", "total"}`, em tópicos); ao terminar, começa a simulação. `selected` é a sessão em simulação. Durante o ao vivo, `select` é ignorado.
+
+#### Catálogo de sessões
+
+`{"cmd": "catalog", "year": 2026}` responde só a quem pediu, com uma mensagem `"type": "catalog"` (não é snapshot):
+
+```json
+{"type": "catalog", "year": 2026, "years": [2026, 2025, ...], "error": null,
+ "meetings": [{"number": 20, "name": "São Paulo Grand Prix", "location": "São Paulo", "country": "Brazil",
+   "sessions": [{"name": "Race", "type": "Race", "path": "2026/…/2026-11-08_Race/", "start": "2026-11-08T17:00:00Z", "recorded": true}]}]}
+```
+
+- Vem do `Index.json` do arquivo da F1 (só sessões que já aconteceram), em ordem do calendário; `start` em UTC; `recorded` diz se já há gravação em `live/recordings/`.
+- Sem acesso ao arquivo (token vencido, sem internet), `error` explica e a lista traz só as sessões já gravadas.
 
 ### Gravações (`live/recordings/*.jsonl.gz`)
 
@@ -275,3 +293,5 @@ Feed bruto da sessão, para reproduzir depois. Fica fora do git (dados do feed o
 - Uma linha JSON por mensagem: `[epoch_utc, tópico, dados]`, em ordem de tempo. Os tópicos `.z` (`Position`, `CarData`) já estão descomprimidos e sem o sufixo.
 - Os dados são exatamente os do feed: o primeiro valor de cada tópico é o estado completo e os seguintes são mudanças parciais (aplicadas por `merge` em `live/state.py`). X/Y vêm em décimos de metro.
 - Uma corrida completa ocupa ~12 MB.
+- Sessões baixadas pelo site se chamam `{ano}-{gp}-{sessão}.jsonl.gz` (ex.: `2026-sao-paulo-grand-prix-qualifying.jsonl.gz`); as do ao vivo automático, `{data}-{ano}-{rodada}-{sessão}.jsonl.gz`. O servidor identifica a sessão de cada gravação pelo `SessionInfo` do começo do arquivo, não pelo nome.
+- Nem toda sessão tem todos os tópicos (`LapCount` só existe em corrida e sprint); os que faltam são pulados.

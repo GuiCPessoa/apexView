@@ -26,7 +26,7 @@ Leia `INICIO.md` para o guia completo (arquitetura, setup, roadmap e riscos).
 ## Comandos
 - Pipeline: `cd pipeline && source .venv/bin/activate` (Windows: `.venv\Scripts\activate`), depois `python export_session.py 2024 Monza R` (sessão, exige login F1 TV) ou `python export_standings.py 2026` (calendário e classificação) ou `python export_season.py 2024 2025 2026` (temporadas inteiras, só corridas)
 - Frontend: `cd web && npm install && npm run dev`
-- Ao vivo: `cd live && source .venv/bin/activate`, depois `python server.py live` (durante a sessão) ou `python server.py replay recordings/2026-20-r.jsonl.gz` (simulação; gravação criada com `python record_archive.py 2026 20 R`)
+- Ao vivo: `cd live && source .venv/bin/activate`, depois `python server.py` (automático: ao vivo no horário das sessões do `calendar.json`; fora delas, o site escolhe a sessão a simular). Forçar: `python server.py live` ou `python server.py replay [ARQUIVO]`
 - Testes do pipeline: `cd pipeline && pytest`; do ao vivo: `cd live && pytest`
 - Testes do frontend (lógica em `web/src/lib`): `cd web && npm test`
 

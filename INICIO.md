@@ -130,12 +130,15 @@ npm run dev
 cd live
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python server.py live            # durante uma sessão; grava o feed em live/recordings/
+python server.py                 # modo automático (deixe rodando)
 ```
 Com o backend rodando e o `npm run dev` aberto, use a aba **Ao vivo** do site. O backend só escuta em `127.0.0.1:8000`.
 
+- **Modo automático (padrão):** no horário de cada sessão do fim de semana de GP (de 15 min antes até 1 h depois do fim previsto), o site mostra o **ao vivo**, sem escolha, e o feed é gravado em `live/recordings/`. Os horários vêm de `data/{ano}/calendar.json`: mantenha o calendário exportado (`python export_standings.py 2026` no pipeline). Fora das sessões, o site simula uma gravação e o botão **Trocar sessão** lista as sessões de qualquer ano desde 2018: as já baixadas abrem na hora; as outras (marcadas com ↓) o servidor baixa do arquivo da F1 (~1 min) e guarda em `live/recordings/`.
+- `python server.py live` força o ao vivo; `python server.py replay [ARQUIVO] [--speed 4] [--start 00:50:00]` só simula (sem ligar o ao vivo sozinho).
+
 - **Login:** usa o mesmo token F1 TV do pipeline (o do FastF1). Ele vence em poucos dias: antes do GP, rode um export qualquer do pipeline para renovar o login. O backend nunca lê nem grava usuário e senha.
-- **Simulação:** `python record_archive.py 2026 20 R` baixa o feed bruto de uma sessão passada para `live/recordings/`, e `python server.py replay recordings/2026-20-r.jsonl.gz` a reproduz como se fosse ao vivo (pausa, velocidade e linha do tempo na própria página).
+- **Simulação:** pausa, velocidade e linha do tempo na própria página. Para baixar uma sessão pelo terminal: `python record_archive.py 2026 20 R`.
 - **Gravações** ficam em `live/recordings/` (fora do git): são dados do feed oficial, só para uso pessoal.
 - Todo acesso ao live timing está em `live/feed.py`. Se o feed mudar, o ajuste fica ali.
 
@@ -154,7 +157,7 @@ printf "pipeline/cache/\npipeline/.venv/\nnode_modules/\n" > .gitignore
 - [x] **Fase 4 — Corrida:** posições por volta, estratégia de pneus (stints), pit stops, gaps. Aba "Corrida" com destaques, posições volta a volta, estratégia de pneus, diferença para o líder e tabela de pit stops; testes do front com Vitest
 - [x] **Fase 5 — Treinos e classificação:** setores, melhores voltas, evolução por sessão. Resultados com Q1/Q2/Q3 e cortes; treinos ordenados pela melhor volta; aba "Voltas e setores" com volta ideal, speed trap e evolução da sessão (faixas de Q1/Q2/Q3). Monza 2024 foi exportado completo para o desenvolvimento; hoje o site traz só as corridas de 2026
 - [x] **Redesign — painel único da sessão:** as abas da sessão viraram uma página só, em cartões (tema escuro de "pit wall", fonte Titillium Web). Na corrida: mapa e replay, torre, telemetria, resultado, posições, estratégia, gaps e pit stops; na classificação e nos treinos: telemetria, resultado, setores e evolução. Clicar num piloto o põe em foco em todos os cartões (até dois, que são os comparados na telemetria), e a volta do replay aparece como cursor nos gráficos. Componentes em `web/src/panels/`
-- [x] **Fase 6 — Ao vivo:** LiveF1 → FastAPI → WebSocket. Backend local em `live/` (veja a seção 4.5) e aba "Ao vivo" no site: mapa com os carros, torre (líder ou intervalo, pneu e idade, última volta), telemetria dos pilotos em foco (velocidade, marcha, RPM, acelerador, freio, DRS, setores e gráficos da volta atual e da anterior por distância), direção de prova e clima. Atraso ajustável para sincronizar com a TV. Fora do fim de semana de GP, simula a partir de uma gravação (feed bruto de uma sessão passada)
+- [x] **Fase 6 — Ao vivo:** LiveF1 → FastAPI → WebSocket. Backend local em `live/` (veja a seção 4.5) e aba "Ao vivo" no site: mapa com os carros, torre (líder ou intervalo, pneu e idade, última volta), telemetria dos pilotos em foco (velocidade, marcha, RPM, acelerador, freio, DRS, setores e gráficos da volta atual e da anterior por distância), direção de prova e clima. Atraso ajustável para sincronizar com a TV. Fora do fim de semana de GP, simula a partir de uma gravação (feed bruto de uma sessão passada). Modo automático: o ao vivo entra sozinho no horário das sessões; fora delas, o site escolhe qualquer sessão desde 2018 (baixada do arquivo da F1 na hora).
 
 Cada fase deve terminar com algo **visível e funcionando** no navegador.
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { LiveSnapshot } from '../types/live'
+import type { LiveCatalog, LiveSnapshot } from '../types/live'
 
 /** Endereço do backend local. Pode ser trocado com VITE_LIVE_URL no .env.local do web/. */
 export const LIVE_URL: string = import.meta.env.VITE_LIVE_URL ?? 'ws://127.0.0.1:8000/ws'
@@ -81,6 +81,11 @@ export function tracePath(
   return path
 }
 
+/** Identifica o que está passando (ao vivo ou qual gravação); quando muda, o histórico do atraso é descartado. */
+export function sourceKey(snap: LiveSnapshot): string {
+  return `${snap.source.mode}:${snap.source.selected ?? ''}`
+}
+
 export type LiveStatus = 'connecting' | 'open' | 'closed'
 
 /**
@@ -90,6 +95,8 @@ export type LiveStatus = 'connecting' | 'open' | 'closed'
 export function useLiveFeed(delayS: number) {
   const [status, setStatus] = useState<LiveStatus>('connecting')
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null)
+  const [catalog, setCatalog] = useState<LiveCatalog | null>(null)
+  const lastKey = useRef<string | null>(null)
   const buffer = useRef(new DelayBuffer<LiveSnapshot>())
   const outline = useRef<LiveSnapshot['outline']>(null)
   const socket = useRef<WebSocket | null>(null)
@@ -113,7 +120,18 @@ export function useLiveFeed(delayS: number) {
       }
       ws.onmessage = (e) => {
         try {
-          const snap = JSON.parse(e.data) as LiveSnapshot
+          const msg = JSON.parse(e.data) as LiveSnapshot | LiveCatalog
+          if (msg.type === 'catalog') {
+            setCatalog(msg)
+            return
+          }
+          const snap = msg
+          const key = sourceKey(snap)
+          if (key !== lastKey.current) {
+            // trocou de sessão: o atraso não deve mostrar a anterior
+            buffer.current.clear()
+            lastKey.current = key
+          }
           if ('outline' in snap) outline.current = snap.outline
           buffer.current.push(withOutline(snap, outline.current), Date.now())
         } catch {
@@ -154,5 +172,12 @@ export function useLiveFeed(delayS: number) {
     }
   }, [])
 
-  return { status, snapshot, send, requestTraces }
+  /** Pede a lista de sessões de um ano (chega em `catalog`). */
+  const requestCatalog = useCallback((year: number | null) => {
+    if (socket.current?.readyState === WebSocket.OPEN) {
+      socket.current.send(JSON.stringify({ cmd: 'catalog', year }))
+    }
+  }, [])
+
+  return { status, snapshot, send, requestTraces, catalog, requestCatalog }
 }

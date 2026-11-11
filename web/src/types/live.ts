@@ -49,9 +49,23 @@ export interface LiveRaceControl {
   message: string | null
 }
 
+/** Sessão do calendário (modo automático). */
+export interface LiveScheduled {
+  label: string // "Las Vegas Grand Prix · Treino 1"
+  event: string
+  code: string // FP1, Q, R...
+  start: string // ISO UTC
+}
+
 export interface LiveSource {
   mode: 'live' | 'replay' | 'idle'
   error: string | null
+  auto?: boolean // o servidor liga o ao vivo sozinho no horário das sessões
+  canChoose?: boolean // fora do ao vivo, o site pode escolher a sessão
+  selected?: string | null // sessão em simulação (caminho no arquivo da F1)
+  loading?: { path: string; label: string; done: number; total: number } | null // baixando do arquivo
+  liveSession?: LiveScheduled | null
+  nextLive?: LiveScheduled | null
   recording?: string | null
   speed?: number
   paused?: boolean
@@ -98,4 +112,29 @@ export interface LiveSnapshot {
   source: LiveSource
   /** Só para os pilotos pedidos com {"cmd": "traces"}: volta atual (até o instante mostrado) e a anterior. */
   traces?: Record<string, { current: LiveTrace | null; previous: LiveTrace | null }>
+}
+
+/** Sessões que dá para simular, resposta a {"cmd": "catalog", "year": ...}. */
+export interface LiveCatalogSession {
+  name: string | null // "Race", "Qualifying", "Practice 1"...
+  type: string | null
+  path: string
+  start: string | null // ISO UTC
+  recorded: boolean // já baixada em live/recordings/
+}
+
+export interface LiveMeeting {
+  number: number | null
+  name: string | null
+  location: string | null
+  country: string | null
+  sessions: LiveCatalogSession[]
+}
+
+export interface LiveCatalog {
+  type: 'catalog'
+  year: number
+  years: number[]
+  meetings: LiveMeeting[]
+  error: string | null
 }

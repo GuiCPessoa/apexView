@@ -2063,3 +2063,109 @@ pre.code {
   font-size: 11px;
   color: var(--muted);
 }
+
+/* Escolha da sessão (ao vivo) */
+.next-live {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.next-live .live-badge {
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.notice.download {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  border-color: #f5c400;
+}
+
+.notice.download progress {
+  flex: 1;
+  height: 6px;
+  accent-color: var(--accent);
+}
+
+.choose-btn {
+  white-space: nowrap;
+}
+
+.chooser-aside {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chooser-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.chooser-list li {
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.chooser-gp {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+  min-width: 0;
+}
+
+.chooser-gp strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chooser-gp .muted {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.chooser-sessions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chooser-sessions .chip {
+  font-size: 12px;
+  padding: 3px 9px;
+}
+
+.chooser-sessions .chip.recorded {
+  color: var(--text);
+}
+
+.chooser-sessions .chip.current {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  cursor: default;
+}
+
+.chooser-sessions .chip:disabled:not(.current) {
+  opacity: 0.45;
+  cursor: wait;
+}
+
+@media (max-width: 640px) {
+  .chooser-list {
+    grid-template-columns: 1fr;
+  }
+}
