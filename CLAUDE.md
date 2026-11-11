@@ -27,6 +27,7 @@ Leia `INICIO.md` para o guia completo (arquitetura, setup, roadmap e riscos).
 - Pipeline: `cd pipeline && source .venv/bin/activate` (Windows: `.venv\Scripts\activate`), depois `python export_session.py 2024 Monza R` (sessão, exige login F1 TV) ou `python export_standings.py 2026` (calendário e classificação)
 - Frontend: `cd web && npm install && npm run dev`
 - Testes do pipeline: `cd pipeline && pytest`
+- Testes do frontend (lógica em `web/src/lib`): `cd web && npm test`
 
 ## Regras do projeto
 - Manter tudo **gratuito**. Avise antes de propor qualquer serviço pago.

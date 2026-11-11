@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
+import { cssVar } from '../lib/chart'
 import type { Comparison } from '../lib/telemetry'
 import type { Corner } from '../types/data'
 
@@ -79,10 +80,6 @@ const CHARTS: ChartSpec[] = [
 ]
 
 const SYNC_KEY = 'apexview-telemetry'
-
-function cssVar(name: string, fallback: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
-}
 
 /** Linhas verticais com o número das curvas (distâncias do track.json). */
 function cornersPlugin(corners: Corner[], color: string): uPlot.Plugin {

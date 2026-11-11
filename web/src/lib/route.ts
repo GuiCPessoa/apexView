@@ -6,7 +6,9 @@ export type Route =
   | { view: 'calendar'; year: number | null }
   | { view: 'session'; path: string | null; tab?: SessionTab }
 
-export type SessionTab = 'results' | 'replay' | 'telemetry'
+export type SessionTab = 'results' | 'race' | 'replay' | 'telemetry'
+
+const TAB_SLUG: Record<SessionTab, string> = { results: '', race: 'corrida', replay: 'replay', telemetry: 'telemetria' }
 
 export function parseRoute(hash: string): Route {
   const [view, ...rest] = hash.replace(/^#\/?/, '').split('/').filter(Boolean)
@@ -18,14 +20,13 @@ export function parseRoute(hash: string): Route {
       return {
         view: 'session',
         path: rest.length >= 3 ? rest.slice(0, 3).join('/') : null,
-        tab: rest[3] === 'replay' ? 'replay' : rest[3] === 'telemetria' ? 'telemetry' : 'results',
+        tab: (Object.entries(TAB_SLUG).find(([, slug]) => slug && slug === rest[3])?.[0] as SessionTab) ?? 'results',
       }
     default:
       return { view: 'standings', year }
   }
 }
 
-const TAB_SLUG: Record<SessionTab, string> = { results: '', replay: 'replay', telemetry: 'telemetria' }
 
 export function routeHref(route: Route): string {
   switch (route.view) {

@@ -81,6 +81,9 @@ def build_laps(session) -> list[dict]:
             "compound": to_str(lap.get("Compound")),
             "stint": to_int(lap.get("Stint")),
             "tyreLife": to_int(lap.get("TyreLife")),
+            "freshTyre": None if pd.isna(lap.get("FreshTyre")) else bool(lap.get("FreshTyre")),
+            # códigos de status de pista ocorridos na volta, ex.: "1", "4" (SC), "671"
+            "trackStatus": to_str(lap.get("TrackStatus")),
             "pitIn": not pd.isna(lap.get("PitInTime")),
             "pitOut": not pd.isna(lap.get("PitOutTime")),
             # tempos de sessão (s), mesma base do replay

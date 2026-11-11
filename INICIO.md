@@ -135,7 +135,7 @@ printf "pipeline/cache/\npipeline/.venv/\nnode_modules/\n" > .gitignore
 - [x] **Fase 1 — Standings e calendário:** tabelas de pilotos e equipes (Jolpica). `python export_standings.py 2026` gera `calendar.json` e `standings.json`; o site tem as abas Classificação, Calendário e Sessões
 - [x] **Fase 2 — Mapa da pista:** traçado a partir de X/Y de uma volta rápida; replay com slider de tempo. Pronto para corridas e sprints: `export_session.py` gera `track.json`, `track_status.json` e `positions/{DRV}.json.gz` (~40 KB por piloto); aba "Mapa e replay" na sessão
 - [x] **Fase 3 — Telemetria:** comparar duas voltas (velocidade, acelerador, freio, marcha, DRS) alinhadas por distância. `export_session.py` gera `telemetry/{DRV}.json.gz` (amostras originais, até ~130 KB por piloto); aba "Telemetria" com gráficos uPlot sincronizados, delta, setores e mini-mapa
-- [ ] **Fase 4 — Corrida:** posições por volta, estratégia de pneus (stints), pit stops, gaps
+- [x] **Fase 4 — Corrida:** posições por volta, estratégia de pneus (stints), pit stops, gaps. Aba "Corrida" com destaques, posições volta a volta, estratégia de pneus, diferença para o líder e tabela de pit stops; testes do front com Vitest
 - [ ] **Fase 5 — Treinos e classificação:** setores, melhores voltas, evolução por sessão
 - [ ] **Fase 6 — Ao vivo:** LiveF1 → FastAPI → WebSocket
 

@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { formatLapTime, formatPoints, loadLaps, loadMeta, loadResults } from '../lib/data'
 import { routeHref, useAsync, type SessionTab } from '../lib/route'
+import RaceView from './RaceView'
 import ReplayView from './ReplayView'
 import TelemetryView from './TelemetryView'
 import type { DataIndex, DriverResult, Lap, SessionMeta } from '../types/data'
@@ -51,6 +52,14 @@ export default function SessionView({ path, tab, index }: { path: string | null;
             >
               Resultados
             </a>
+            {(data[0].session === 'R' || data[0].session === 'S') && (
+              <a
+                href={routeHref({ view: 'session', path: current, tab: 'race' })}
+                className={tab === 'race' ? 'active' : undefined}
+              >
+                {data[0].session === 'S' ? 'Sprint' : 'Corrida'}
+              </a>
+            )}
             {data[0].replay ? (
               <a
                 href={routeHref({ view: 'session', path: current, tab: 'replay' })}
@@ -76,7 +85,9 @@ export default function SessionView({ path, tab, index }: { path: string | null;
               </span>
             )}
           </nav>
-          {tab === 'replay' && data[0].replay ? (
+          {tab === 'race' && (data[0].session === 'R' || data[0].session === 'S') ? (
+            <RaceView results={data[1]} laps={data[2]} />
+          ) : tab === 'replay' && data[0].replay ? (
             <ReplayView key={current} path={current} meta={data[0]} results={data[1]} laps={data[2]} />
           ) : tab === 'telemetry' && data[0].telemetry?.length ? (
             <TelemetryView key={current} path={current} meta={data[0]} results={data[1]} laps={data[2]} />

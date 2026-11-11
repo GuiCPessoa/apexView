@@ -906,3 +906,256 @@ code {
     max-height: 140px;
   }
 }
+
+/* Corrida */
+.race-section {
+  margin-bottom: 28px;
+}
+
+.race-section > h2 {
+  margin-bottom: 12px;
+}
+
+.highlights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.stat-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.stat-value .team-bar {
+  height: 22px;
+}
+
+.stat-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 6px 4px;
+  overflow: hidden;
+}
+
+.uplot-host {
+  width: 100%;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.chip i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  opacity: 0.4;
+}
+
+.chip.on {
+  color: var(--text);
+}
+
+.chip.on i {
+  opacity: 1;
+}
+
+.chip.ghost {
+  border-style: dashed;
+}
+
+/* Estratégia */
+.strategy {
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.strategy-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 24px;
+}
+
+.strategy-driver {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 52px;
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.strategy-driver .team-bar {
+  height: 14px;
+}
+
+.strategy-track {
+  position: relative;
+  flex: 1;
+  height: 18px;
+}
+
+.stint {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 4px;
+  border: 1px solid var(--surface);
+  box-sizing: border-box;
+}
+
+.stint.soft {
+  background: #e8002d;
+  color: #fff;
+}
+
+.stint.medium {
+  background: #f5c400;
+  color: #2b2100;
+}
+
+.stint.hard {
+  background: #f0f0ec;
+  color: #222;
+  border-color: var(--border);
+}
+
+.stint.inter {
+  background: #43b02a;
+  color: #fff;
+}
+
+.stint.wet {
+  background: #0067ad;
+  color: #fff;
+}
+
+.stint.unknown {
+  background: var(--muted);
+  color: var(--bg);
+}
+
+.stint.used {
+  background-image: repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.28) 0 3px, transparent 3px 7px);
+}
+
+.strategy-axis {
+  height: 18px;
+  margin-top: 4px;
+}
+
+.strategy-axis span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.strategy-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.strategy-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.strategy-legend .stint {
+  position: static;
+  display: inline-block;
+  width: 22px;
+  height: 12px;
+}
+
+.th-sort {
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.th-sort.active {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  .strategy {
+    padding: 10px 8px;
+  }
+
+  .strategy-driver {
+    width: 44px;
+  }
+
+  .stint {
+    font-size: 9px;
+  }
+}

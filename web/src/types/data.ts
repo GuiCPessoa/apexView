@@ -137,6 +137,8 @@ export interface Lap {
   compound: string | null
   stint: number | null
   tyreLife: number | null
+  freshTyre: boolean | null // pneu novo no início do stint
+  trackStatus: string | null // códigos de status da pista na volta, ex.: "1", "4" (SC), "671"
   pitIn: boolean
   pitOut: boolean
   // segundos de sessão, mesma base do replay

@@ -154,6 +154,8 @@ Uma linha por volta de cada piloto.
 | `compound` | string \| null | `SOFT`, `MEDIUM`, `HARD`, `INTERMEDIATE`, `WET` |
 | `stint` | int \| null | Número do stint |
 | `tyreLife` | int \| null | Voltas no jogo de pneus |
+| `freshTyre` | bool \| null | O jogo era novo quando o stint começou |
+| `trackStatus` | string \| null | Códigos de status da pista que ocorreram na volta, concatenados (ex.: `"1"`, `"4"` = safety car, `"671"` = VSC). Mesmos códigos de `track_status.json` |
 | `pitIn`, `pitOut` | bool | Entrou ou saiu dos boxes nesta volta |
 | `startTime`, `endTime` | float \| null | Início e fim da volta, em segundos de sessão |
 | `pitInTime`, `pitOutTime` | float \| null | Entrada e saída dos boxes, em segundos de sessão |
