@@ -1,4 +1,8 @@
 from export_standings import (
+    build_season_stats,
+    by_round,
+    classified,
+    fetch_all,
     build_calendar,
     build_constructor_standings,
     build_driver_standings,
@@ -73,3 +77,65 @@ def test_build_standings_rows():
         "Constructor": {"constructorId": "audi", "name": "Audi", "nationality": "German"},
     }], COLORS_2026)
     assert team["teamColor"] == "#ff2d00" and team["points"] == 652.0
+
+
+def res(code, pos, points, text=None, team=("mercedes", "Mercedes")):
+    return {
+        "position": str(pos), "positionText": text or str(pos), "points": str(points),
+        "Driver": {"code": code, "familyName": code.title()},
+        "Constructor": {"constructorId": team[0], "name": team[1]},
+    }
+
+
+def test_season_stats_soma_sprints_e_conta_podios_poles_e_forma():
+    races = {
+        1: [res("ANT", 1, 25), res("VER", 2, 18, team=("red_bull", "Red Bull")), res("RUS", 3, 15)],
+        2: [res("VER", 1, 25, team=("red_bull", "Red Bull")), res("RUS", 2, 18), res("ANT", 20, 0, "R")],
+    }
+    sprints = {2: [res("ANT", 1, 8), res("NEW", 2, 7)]}
+    poles = {1: [res("ANT", 1, 0)], 2: [res("ANT", 1, 0)]}
+    stats = build_season_stats(races, sprints, poles, {"mercedes": "#27f4d2", "red bull": "#3671c6"})
+
+    assert stats["history"]["rounds"] == [1, 2]
+    assert stats["history"]["points"]["ANT"] == [25.0, 33.0]
+    assert stats["history"]["points"]["VER"] == [18.0, 43.0]
+    assert stats["history"]["points"]["NEW"] == [0.0, 7.0]  # estreou na rodada 2
+    assert stats["drivers"]["ANT"] == {"podiums": 1, "poles": 2, "form": [1, None]}
+    assert stats["drivers"]["RUS"]["podiums"] == 2
+    assert stats["teams"]["mercedes"] == [
+        {"driver": "ANT", "points": 33.0}, {"driver": "RUS", "points": 33.0}, {"driver": "NEW", "points": 7.0},
+    ]
+    assert stats["teams"]["red_bull"] == [{"driver": "VER", "points": 43.0}]
+    assert stats["winners"] == [
+        {"round": 1, "driver": "ANT", "team": "Mercedes", "teamColor": "#27f4d2"},
+        {"round": 2, "driver": "VER", "team": "Red Bull", "teamColor": "#3671c6"},
+    ]
+
+
+def test_forma_guarda_so_as_ultimas_5():
+    races = {r: [res("ANT", r, 0)] for r in range(1, 8)}
+    assert build_season_stats(races, {}, {}, {})["drivers"]["ANT"]["form"] == [3, 4, 5, 6, 7]
+
+
+def test_classified_e_by_round():
+    assert classified(res("ANT", 3, 15)) == 3
+    assert classified(res("ANT", 18, 0, "R")) is None
+    pages = [{"round": "1", "Results": [1, 2]}, {"round": "1", "Results": [3]}, {"round": "2", "Results": [4]}]
+    assert by_round(pages, "Results") == {1: [1, 2, 3], 2: [4]}
+
+
+class FakeResp(list):
+    def __init__(self, items, total):
+        super().__init__(items)
+        self.total_results = total
+
+
+def test_fetch_all_pagina_por_offset():
+    calls = []
+
+    def call(limit, offset, **kw):
+        calls.append(offset)
+        return FakeResp([offset], 250)
+
+    assert fetch_all(call, season=2026) == [0, 100, 200]
+    assert calls == [0, 100, 200]

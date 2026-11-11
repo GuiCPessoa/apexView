@@ -60,6 +60,10 @@ export interface Standings {
   generatedAt: string
   drivers: DriverStanding[]
   constructors: ConstructorStanding[]
+  /** Vencedor de cada corrida já disputada. */
+  winners?: RoundWinner[]
+  /** Pontos acumulados (corridas + sprints) após cada rodada, por piloto. */
+  history?: { rounds: number[]; points: Record<string, number[]> }
 }
 
 export interface DriverStanding {
@@ -73,6 +77,17 @@ export interface DriverStanding {
   teamColor: string | null
   points: number
   wins: number
+  podiums?: number
+  poles?: number
+  /** Últimas 5 corridas, da mais antiga para a mais recente; null = não classificado. */
+  form?: (number | null)[]
+}
+
+export interface RoundWinner {
+  round: number
+  driver: string
+  team: string | null
+  teamColor: string | null
 }
 
 export interface ConstructorStanding {
@@ -83,6 +98,8 @@ export interface ConstructorStanding {
   teamColor: string | null
   points: number
   wins: number
+  /** Pontos marcados por cada piloto por esta equipe (corridas + sprints). */
+  drivers?: { driver: string; points: number }[]
 }
 
 /** data/{ano}/{rodada}-{local}/{sessao}/meta.json */

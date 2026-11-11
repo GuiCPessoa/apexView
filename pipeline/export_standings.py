@@ -3,6 +3,10 @@
 Fonte: Jolpica-F1, pelo cliente Ergast do FastF1 (usa o cache do FastF1).
 Saída: data/{ano}/calendar.json e data/{ano}/standings.json
 
+Além da classificação, o standings.json traz estatísticas da temporada calculadas a partir
+dos resultados de corridas, sprints e classificações (poucas consultas paginadas):
+pódios, poles, forma recente, vencedor de cada rodada e a evolução dos pontos.
+
 Uso: python export_standings.py 2026
 """
 
@@ -10,6 +14,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections import defaultdict
 from importlib import resources
 from pathlib import Path
 
@@ -103,6 +108,10 @@ def build_calendar(races: list[dict]) -> list[dict]:
     return rounds
 
 
+def driver_code(driver: dict) -> str:
+    return driver.get("code") or driver["familyName"][:3].upper()
+
+
 def build_driver_standings(rows: list[dict], colors: dict[str, str]) -> list[dict]:
     out = []
     for r in rows:
@@ -111,7 +120,7 @@ def build_driver_standings(rows: list[dict], colors: dict[str, str]) -> list[dic
         last_team = teams[-1] if teams else None
         out.append({
             "position": to_int(r.get("position")),
-            "driver": driver.get("code") or driver["familyName"][:3].upper(),
+            "driver": driver_code(driver),
             "number": driver.get("permanentNumber"),
             "givenName": driver["givenName"],
             "familyName": driver["familyName"],
@@ -138,6 +147,98 @@ def build_constructor_standings(rows: list[dict], colors: dict[str, str]) -> lis
             "wins": to_int(r.get("wins")) or 0,
         })
     return out
+
+
+FORM_RACES = 5  # forma: últimas 5 corridas
+PAGE_SIZE = 100  # máximo de linhas por consulta no Jolpica
+
+
+def fetch_all(call, **kwargs) -> list[dict]:
+    """Todas as páginas de uma consulta do Jolpica (máx. 100 linhas por página)."""
+    items: list[dict] = []
+    offset = 0
+    while True:
+        resp = call(**kwargs, limit=PAGE_SIZE, offset=offset)
+        items += list(resp)
+        offset += PAGE_SIZE
+        if offset >= resp.total_results:
+            return items
+
+
+def by_round(races: list[dict], key: str) -> dict[int, list[dict]]:
+    """Junta os resultados por rodada (uma corrida pode vir partida entre duas páginas)."""
+    out: dict[int, list[dict]] = defaultdict(list)
+    for race in races:
+        out[int(race["round"])] += race.get(key, [])
+    return dict(sorted(out.items()))
+
+
+def classified(result: dict) -> int | None:
+    """Posição de chegada, ou None se não foi classificado (abandono, desclassificação...)."""
+    return to_int(result.get("position")) if str(result.get("positionText", "")).isdigit() else None
+
+
+def build_season_stats(
+    races: dict[int, list[dict]],
+    sprints: dict[int, list[dict]],
+    poles: dict[int, list[dict]],
+    colors: dict[str, str],
+) -> dict:
+    """Pódios, poles e forma por piloto; pontos de cada piloto por equipe; vencedor de cada rodada;
+    pontos acumulados rodada a rodada.
+
+    `races`, `sprints` e `poles`: rodada -> linhas de Results / SprintResults / QualifyingResults.
+    """
+    rounds = sorted(set(races) | set(sprints))
+    podiums: dict[str, int] = defaultdict(int)
+    pole_count: dict[str, int] = defaultdict(int)
+    form: dict[str, list[int | None]] = defaultdict(list)
+    winners = []
+    total: dict[str, float] = defaultdict(float)
+    by_team: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    history: dict[str, list[float]] = {}
+
+    for i, rnd in enumerate(rounds):
+        for r in sprints.get(rnd, []) + races.get(rnd, []):
+            code, points = driver_code(r["Driver"]), to_float(r.get("points")) or 0.0
+            total[code] += points
+            by_team[r.get("Constructor", {}).get("constructorId", "")][code] += points
+        for r in races.get(rnd, []):
+            code = driver_code(r["Driver"])
+            pos = classified(r)
+            form[code].append(pos)
+            if pos is not None and pos <= 3:
+                podiums[code] += 1
+            if pos == 1:
+                team = r.get("Constructor", {})
+                winners.append({
+                    "round": rnd,
+                    "driver": code,
+                    "team": team.get("name"),
+                    "teamColor": match_team_color(colors, team.get("constructorId", ""), team.get("name", "")),
+                })
+        for code in total:
+            history.setdefault(code, [0.0] * i)
+        for code, points in history.items():
+            points.append(round(total[code], 1))
+    for rows in poles.values():
+        for r in rows:
+            if to_int(r.get("position")) == 1:
+                pole_count[driver_code(r["Driver"])] += 1
+
+    drivers = set(form) | set(pole_count) | set(history)
+    return {
+        "drivers": {
+            code: {"podiums": podiums[code], "poles": pole_count[code], "form": form[code][-FORM_RACES:]}
+            for code in drivers
+        },
+        "teams": {
+            team: [{"driver": code, "points": round(pts, 1)} for code, pts in sorted(drv.items(), key=lambda x: -x[1])]
+            for team, drv in by_team.items()
+        },
+        "winners": winners,
+        "history": {"rounds": rounds, "points": history},
+    }
 
 
 def export_standings(year: int, data_dir: Path = DATA_DIR) -> Path:
@@ -171,6 +272,18 @@ def export_standings(year: int, data_dir: Path = DATA_DIR) -> Path:
             constructors_raw[0]["ConstructorStandings"] if constructors_raw else [], colors
         ),
     }
+    stats = build_season_stats(
+        by_round(fetch_all(ergast.get_race_results, season=year), "Results"),
+        by_round(fetch_all(ergast.get_sprint_results, season=year), "SprintResults"),
+        by_round(fetch_all(ergast.get_qualifying_results, season=year, results_position=1), "QualifyingResults"),
+        colors,
+    )
+    for d in standings["drivers"]:
+        d.update(stats["drivers"].get(d["driver"], {"podiums": 0, "poles": 0, "form": []}))
+    for c in standings["constructors"]:
+        c["drivers"] = stats["teams"].get(c["constructorId"], [])
+    standings["winners"] = stats["winners"]
+    standings["history"] = stats["history"]
     write_json(out / "standings.json", standings)
     update_index(data_dir)
 

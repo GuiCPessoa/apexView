@@ -72,8 +72,14 @@ Cada item de `rounds`:
 ## `{ano}/standings.json`
 
 ```json
-{"schemaVersion": 1, "year": 2026, "afterRound": 20, "generatedAt": "...", "drivers": [ ... ], "constructors": [ ... ]}
+{"schemaVersion": 1, "year": 2026, "afterRound": 20, "generatedAt": "...", "drivers": [ ... ], "constructors": [ ... ],
+ "winners": [{"round": 20, "driver": "NOR", "team": "McLaren", "teamColor": "#ff8000"}, ...],
+ "history": {"rounds": [1, 2, ..., 20], "points": {"ANT": [18.0, 47.0, ...], ...}}}
 ```
+
+- `winners`: vencedor de cada corrida já disputada.
+- `history`: pontos acumulados de cada piloto após cada rodada, corridas **e sprints** somadas (o último valor bate com `points`). Pilotos que estrearam no meio do ano têm 0 nas rodadas anteriores.
+- `winners`, `history` e os campos de estatística abaixo são calculados a partir dos resultados de corridas, sprints e classificações do Jolpica (poucas consultas paginadas). Arquivos exportados antes podem não tê-los; o site funciona sem eles.
 
 `drivers`:
 
@@ -88,6 +94,9 @@ Cada item de `rounds`:
 | `teamColor` | string \| null | Cor oficial da equipe atual, `#rrggbb` |
 | `points` | float | Pontos |
 | `wins` | int | Vitórias |
+| `podiums` | int | Pódios em corridas (sem sprints) |
+| `poles` | int | Poles (1º na classificação de domingo; sem a da sprint) |
+| `form` | (int \| null)[] | Últimas 5 corridas, da mais antiga à mais recente; `null` = não classificado |
 
 `constructors`:
 
@@ -100,6 +109,7 @@ Cada item de `rounds`:
 | `teamColor` | string \| null | Cor oficial, `#rrggbb` |
 | `points` | float | Pontos |
 | `wins` | int | Vitórias |
+| `drivers` | `{driver, points}[]` | Pontos de cada piloto **por esta equipe** (quem trocou de equipe aparece nas duas), do maior para o menor |
 
 As cores vêm do arquivo de constantes do FastF1 (`fastf1/plotting/constants.json`, temporadas 2018+). Equipes que o Jolpica nomeia diferente do FastF1 estão em `TEAM_ALIASES` em `export_standings.py`.
 
