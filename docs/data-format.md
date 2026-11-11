@@ -194,6 +194,8 @@ Uma linha por volta de cada piloto.
 
 Traçado tirado da volta mais rápida da sessão, com um ponto a cada 10 m. Exportado para toda sessão (o replay e a telemetria usam).
 
+Se a posição dessa volta for inválida (sem amostras, menos de 500 m de extensão ou mais de 20% das amostras no mesmo ponto, como as posições placeholder em (0, 0) de Mônaco 2026), o export tenta a próxima volta mais rápida, de qualquer piloto, e avisa no log. `referenceLap` diz qual volta foi usada. As curvas (`distance`) são medidas nessa mesma volta.
+
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `rotation` | float | Rotação (graus) para a orientação oficial do mapa. `0` se as informações do circuito não estiverem disponíveis |
@@ -228,7 +230,7 @@ Um arquivo por piloto, em JSON comprimido com gzip (o front descomprime com `Dec
 ```
 
 - A amostra `i` corresponde ao tempo de sessão `start + i / hz`. Todos os pilotos usam a mesma grade (`meta.replay`).
-- `x`, `y` são inteiros em metros, **codificados em diferenças** como na telemetria (depois de um `null` o valor volta a ser absoluto). `null` quando não há dado real a menos de 3 s (carro na garagem, abandono, falha de transmissão).
+- `x`, `y` são inteiros em metros, **codificados em diferenças** como na telemetria (depois de um `null` o valor volta a ser absoluto). `null` quando não há dado real a menos de 3 s (carro na garagem, abandono, falha de transmissão). Amostras em exatamente (0, 0) são placeholder do feed e contam como ausentes.
 - Monza 2024 (corrida, 77 min): cerca de 22 KB por piloto, 450 KB no total.
 
 ## `telemetry/{DRV}.json.gz`

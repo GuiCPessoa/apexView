@@ -58,12 +58,25 @@ main {
 }
 
 .logo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   font-size: 22px;
   font-weight: 900;
   font-style: italic;
   letter-spacing: -0.02em;
   color: var(--text);
   text-decoration: none;
+}
+
+.logo em {
+  font-style: inherit;
+}
+
+.logo img {
+  display: block;
+  width: 28px;
+  height: 28px;
 }
 
 .logo span {
