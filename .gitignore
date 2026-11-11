@@ -1,0 +1,16 @@
+# Python
+pipeline/cache/
+pipeline/.venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node
+node_modules/
+web/dist/
+
+# Segredos e sistema
+.env
+.env.*
+.DS_Store
