@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import { formatLapTime, formatPoints, loadLaps, loadMeta, loadResults } from '../lib/data'
 import { routeHref, useAsync, type SessionTab } from '../lib/route'
+import LapsView from './LapsView'
 import RaceView from './RaceView'
+import { PracticeResults, QualifyingResults } from './SessionResults'
 import ReplayView from './ReplayView'
 import TelemetryView from './TelemetryView'
 import type { DataIndex, DriverResult, Lap, SessionMeta } from '../types/data'
@@ -15,6 +17,10 @@ export default function SessionView({ path, tab, index }: { path: string | null;
     current && known ? () => Promise.all([loadMeta(current), loadResults(current), loadLaps(current)]) : null,
     [current, known],
   )
+
+  const [meta, results, laps] = data ?? [null, null, null]
+  const isRace = meta?.session === 'R' || meta?.session === 'S'
+  const isQuali = meta?.session === 'Q' || meta?.session === 'SQ'
 
   if (sessions.length === 0) {
     return (
@@ -42,9 +48,9 @@ export default function SessionView({ path, tab, index }: { path: string | null;
       {!known && <p className="notice">Sessão {current} não exportada.</p>}
       {error && <p className="notice error">{error}</p>}
       {known && !data && !error && <p className="notice">Carregando…</p>}
-      {data && current && (
+      {meta && results && laps && current && (
         <>
-          <SessionHeader meta={data[0]} laps={data[2]} />
+          <SessionHeader meta={meta} laps={laps} />
           <nav className="subtabs" aria-label="Visões da sessão">
             <a
               href={routeHref({ view: 'session', path: current, tab: 'results' })}
@@ -52,27 +58,30 @@ export default function SessionView({ path, tab, index }: { path: string | null;
             >
               Resultados
             </a>
-            {(data[0].session === 'R' || data[0].session === 'S') && (
+            {isRace ? (
               <a
                 href={routeHref({ view: 'session', path: current, tab: 'race' })}
                 className={tab === 'race' ? 'active' : undefined}
               >
-                {data[0].session === 'S' ? 'Sprint' : 'Corrida'}
+                {meta.session === 'S' ? 'Sprint' : 'Corrida'}
+              </a>
+            ) : (
+              <a
+                href={routeHref({ view: 'session', path: current, tab: 'laps' })}
+                className={tab === 'laps' ? 'active' : undefined}
+              >
+                Voltas e setores
               </a>
             )}
-            {data[0].replay ? (
+            {meta.replay && (
               <a
                 href={routeHref({ view: 'session', path: current, tab: 'replay' })}
                 className={tab === 'replay' ? 'active' : undefined}
               >
                 Mapa e replay
               </a>
-            ) : (
-              <span className="disabled" title="Replay disponível só para corridas e sprints">
-                Mapa e replay
-              </span>
             )}
-            {data[0].telemetry?.length ? (
+            {meta.telemetry?.length ? (
               <a
                 href={routeHref({ view: 'session', path: current, tab: 'telemetry' })}
                 className={tab === 'telemetry' ? 'active' : undefined}
@@ -85,14 +94,20 @@ export default function SessionView({ path, tab, index }: { path: string | null;
               </span>
             )}
           </nav>
-          {tab === 'race' && (data[0].session === 'R' || data[0].session === 'S') ? (
-            <RaceView results={data[1]} laps={data[2]} />
-          ) : tab === 'replay' && data[0].replay ? (
-            <ReplayView key={current} path={current} meta={data[0]} results={data[1]} laps={data[2]} />
-          ) : tab === 'telemetry' && data[0].telemetry?.length ? (
-            <TelemetryView key={current} path={current} meta={data[0]} results={data[1]} laps={data[2]} />
+          {tab === 'race' && isRace ? (
+            <RaceView results={results} laps={laps} />
+          ) : tab === 'laps' && !isRace ? (
+            <LapsView meta={meta} results={results} laps={laps} />
+          ) : tab === 'replay' && meta.replay ? (
+            <ReplayView key={current} path={current} meta={meta} results={results} laps={laps} />
+          ) : tab === 'telemetry' && meta.telemetry?.length ? (
+            <TelemetryView key={current} path={current} meta={meta} results={results} laps={laps} />
+          ) : isQuali ? (
+            <QualifyingResults meta={meta} results={results} />
+          ) : isRace ? (
+            <ResultsTable meta={meta} results={results} laps={laps} />
           ) : (
-            <ResultsTable meta={data[0]} results={data[1]} laps={data[2]} />
+            <PracticeResults results={results} laps={laps} />
           )}
         </>
       )}
@@ -101,14 +116,15 @@ export default function SessionView({ path, tab, index }: { path: string | null;
 }
 
 function SessionHeader({ meta, laps }: { meta: SessionMeta; laps: Lap[] }) {
-  const lapCount = Math.max(0, ...laps.map((l) => l.lap ?? 0))
+  const isRace = meta.session === 'R' || meta.session === 'S'
+  const lapCount = isRace ? Math.max(0, ...laps.map((l) => l.lap ?? 0)) : laps.filter((l) => l.lapTime != null).length
   return (
     <div className="section-head">
       <h1>{meta.eventName}</h1>
       <p>
         {meta.sessionName} · {meta.location}, {meta.country}
         {meta.sessionDate && ` · ${new Date(meta.sessionDate).toLocaleDateString('pt-BR')}`}
-        {lapCount > 0 && ` · ${lapCount} voltas`}
+        {lapCount > 0 && ` · ${lapCount} voltas${isRace ? '' : ' cronometradas'}`}
       </p>
     </div>
   )

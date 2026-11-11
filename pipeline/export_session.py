@@ -63,13 +63,33 @@ def build_results(session) -> list[dict]:
             "gridPosition": to_int(r.get("GridPosition")),
             "status": to_str(r.get("Status")),
             "points": to_float(r.get("Points")),
+            # melhores tempos em Q1/Q2/Q3 (SQ1/SQ2/SQ3 na sprint quali); null fora da classificação
+            "q1": to_seconds(r.get("Q1")),
+            "q2": to_seconds(r.get("Q2")),
+            "q3": to_seconds(r.get("Q3")),
         })
     return rows
 
 
-def build_laps(session) -> list[dict]:
+def qualifying_segments(session) -> dict[int, int]:
+    """Índice da volta -> segmento (1, 2 ou 3). Vazio fora de Q e SQ."""
+    try:
+        parts = session.laps.split_qualifying_sessions()
+    except Exception:  # não é classificação
+        return {}
+    return {idx: n for n, part in enumerate(parts, start=1) if part is not None for idx in part.index}
+
+
+def to_bool(value) -> bool | None:
+    if value is None or pd.isna(value):
+        return None
+    return bool(value)
+
+
+def build_laps(session, segments: dict[int, int] | None = None) -> list[dict]:
+    segments = segments or {}
     rows = []
-    for _, lap in session.laps.iterrows():
+    for idx, lap in session.laps.iterrows():
         rows.append({
             "driver": lap["Driver"],
             "lap": to_int(lap["LapNumber"]),
@@ -81,7 +101,7 @@ def build_laps(session) -> list[dict]:
             "compound": to_str(lap.get("Compound")),
             "stint": to_int(lap.get("Stint")),
             "tyreLife": to_int(lap.get("TyreLife")),
-            "freshTyre": None if pd.isna(lap.get("FreshTyre")) else bool(lap.get("FreshTyre")),
+            "freshTyre": to_bool(lap.get("FreshTyre")),
             # códigos de status de pista ocorridos na volta, ex.: "1", "4" (SC), "671"
             "trackStatus": to_str(lap.get("TrackStatus")),
             "pitIn": not pd.isna(lap.get("PitInTime")),
@@ -91,6 +111,11 @@ def build_laps(session) -> list[dict]:
             "endTime": replay.seconds_or_none(lap.get("Time")),
             "pitInTime": replay.seconds_or_none(lap.get("PitInTime")),
             "pitOutTime": replay.seconds_or_none(lap.get("PitOutTime")),
+            "personalBest": bool(lap.get("IsPersonalBest")) if not pd.isna(lap.get("IsPersonalBest")) else False,
+            # volta anulada (limite de pista etc.); null quando a informação não existe
+            "deleted": to_bool(lap.get("Deleted")),
+            "speedTrap": to_int(lap.get("SpeedST")),  # km/h no speed trap
+            "segment": segments.get(idx),  # 1/2/3 em Q e SQ
         })
     return rows
 
@@ -162,14 +187,15 @@ def export_session(year: int, gp: str, ident: str, data_dir: Path = DATA_DIR) ->
     session = fastf1.get_session(year, gp, ident)
     session_code = SESSION_CODES.get(session.name, slugify(session.name).upper())
     with_replay = session_code in REPLAY_SESSIONS
-    session.load(laps=True, telemetry=True, weather=False, messages=False)
+    # messages=True: mensagens da direção de prova, usadas para marcar voltas anuladas
+    session.load(laps=True, telemetry=True, weather=False, messages=True)
 
     slug = f"{int(session.event['RoundNumber']):02d}-{slugify(session.event['Location'])}"
     out = data_dir / str(year) / slug / session_code
     out.mkdir(parents=True, exist_ok=True)
 
     results = build_results(session)
-    laps = build_laps(session)
+    laps = build_laps(session, qualifying_segments(session) if session_code in {"Q", "SQ"} else None)
     write_json(out / "results.json", results)
     write_json(out / "laps.json", laps)
     write_json(out / "track.json", replay.build_track(session))

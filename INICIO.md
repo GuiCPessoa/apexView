@@ -136,7 +136,7 @@ printf "pipeline/cache/\npipeline/.venv/\nnode_modules/\n" > .gitignore
 - [x] **Fase 2 — Mapa da pista:** traçado a partir de X/Y de uma volta rápida; replay com slider de tempo. Pronto para corridas e sprints: `export_session.py` gera `track.json`, `track_status.json` e `positions/{DRV}.json.gz` (~40 KB por piloto); aba "Mapa e replay" na sessão
 - [x] **Fase 3 — Telemetria:** comparar duas voltas (velocidade, acelerador, freio, marcha, DRS) alinhadas por distância. `export_session.py` gera `telemetry/{DRV}.json.gz` (amostras originais, até ~130 KB por piloto); aba "Telemetria" com gráficos uPlot sincronizados, delta, setores e mini-mapa
 - [x] **Fase 4 — Corrida:** posições por volta, estratégia de pneus (stints), pit stops, gaps. Aba "Corrida" com destaques, posições volta a volta, estratégia de pneus, diferença para o líder e tabela de pit stops; testes do front com Vitest
-- [ ] **Fase 5 — Treinos e classificação:** setores, melhores voltas, evolução por sessão
+- [x] **Fase 5 — Treinos e classificação:** setores, melhores voltas, evolução por sessão. Resultados com Q1/Q2/Q3 e cortes; treinos ordenados pela melhor volta; aba "Voltas e setores" com volta ideal, speed trap e evolução da sessão (faixas de Q1/Q2/Q3). Monza 2024 exportado completo (TL1–TL3, Q, R)
 - [ ] **Fase 6 — Ao vivo:** LiveF1 → FastAPI → WebSocket
 
 Cada fase deve terminar com algo **visível e funcionando** no navegador.

@@ -139,6 +139,7 @@ Uma linha por piloto.
 | `gridPosition` | int \| null | Largada; `0` = pit lane |
 | `status` | string \| null | Ex.: `Finished`, `+1 Lap`, `Retired` |
 | `points` | float \| null | Pontos na sessão |
+| `q1`, `q2`, `q3` | float \| null | Melhor tempo (s) em Q1/Q2/Q3 (SQ1/SQ2/SQ3 na sprint quali). `null` fora da classificação ou quando o piloto não passou de fase |
 
 ## `laps.json`
 
@@ -159,6 +160,12 @@ Uma linha por volta de cada piloto.
 | `pitIn`, `pitOut` | bool | Entrou ou saiu dos boxes nesta volta |
 | `startTime`, `endTime` | float \| null | Início e fim da volta, em segundos de sessão |
 | `pitInTime`, `pitOutTime` | float \| null | Entrada e saída dos boxes, em segundos de sessão |
+| `personalBest` | bool | Melhor volta pessoal até aquele momento |
+| `deleted` | bool \| null | Volta anulada (limite de pista etc.), segundo as mensagens da direção de prova. `null` se a informação não existir |
+| `speedTrap` | int \| null | Velocidade no speed trap (km/h) |
+| `segment` | int \| null | Segmento da classificação: 1, 2 ou 3 (Q e SQ). `null` nas outras sessões |
+
+> Na volta de saída dos boxes, `startTime` costuma ser o fim da volta anterior (de antes de o carro ficar parado na garagem). Para saber quando o carro voltou à pista, use `pitOutTime`.
 
 ## `track.json`
 

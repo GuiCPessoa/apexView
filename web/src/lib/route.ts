@@ -6,9 +6,9 @@ export type Route =
   | { view: 'calendar'; year: number | null }
   | { view: 'session'; path: string | null; tab?: SessionTab }
 
-export type SessionTab = 'results' | 'race' | 'replay' | 'telemetry'
+export type SessionTab = 'results' | 'race' | 'laps' | 'replay' | 'telemetry'
 
-const TAB_SLUG: Record<SessionTab, string> = { results: '', race: 'corrida', replay: 'replay', telemetry: 'telemetria' }
+const TAB_SLUG: Record<SessionTab, string> = { results: '', race: 'corrida', laps: 'voltas', replay: 'replay', telemetry: 'telemetria' }
 
 export function parseRoute(hash: string): Route {
   const [view, ...rest] = hash.replace(/^#\/?/, '').split('/').filter(Boolean)

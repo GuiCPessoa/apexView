@@ -434,6 +434,12 @@ code {
   gap: 4px;
   margin: -6px 0 16px;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.subtabs > * {
+  white-space: nowrap;
 }
 
 .subtabs a,
@@ -1158,4 +1164,29 @@ code {
   .stint {
     font-size: 9px;
   }
+}
+
+/* Treinos e classificação */
+.cut-row td {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.lap-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.lap-meta .tyre {
+  width: 16px;
+  height: 16px;
+  font-size: 9px;
 }

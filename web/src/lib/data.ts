@@ -55,6 +55,12 @@ export function formatLapTime(seconds: number | null): string {
   return m > 0 ? `${m}:${s.toFixed(3).padStart(6, '0')}` : s.toFixed(3)
 }
 
+/** Diferença em segundos: "+0.123"; vazio para zero (o próprio líder). */
+export function formatGap(v: number | null): string {
+  if (v == null) return '—'
+  return v === 0 ? '' : `+${v.toFixed(3)}`
+}
+
 /** Pontos sem ".0" desnecessário: 25 -> "25", 0.5 -> "0,5" */
 export function formatPoints(points: number): string {
   return points.toLocaleString('pt-BR', { maximumFractionDigits: 1 })

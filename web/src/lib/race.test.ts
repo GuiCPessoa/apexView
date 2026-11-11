@@ -20,6 +20,10 @@ function lap(p: Partial<Lap> & { driver: string; lap: number }): Lap {
     endTime: null,
     pitInTime: null,
     pitOutTime: null,
+    personalBest: false,
+    deleted: null,
+    speedTrap: null,
+    segment: null,
     ...p,
   }
 }
@@ -35,6 +39,9 @@ function result(p: Partial<DriverResult> & { driver: string }): DriverResult {
     gridPosition: null,
     status: null,
     points: null,
+    q1: null,
+    q2: null,
+    q3: null,
     ...p,
   }
 }

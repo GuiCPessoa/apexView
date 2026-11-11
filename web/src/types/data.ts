@@ -123,6 +123,10 @@ export interface DriverResult {
   gridPosition: number | null // 0 = largou do pit lane
   status: string | null
   points: number | null
+  // melhores tempos em Q1/Q2/Q3 (SQ1/SQ2/SQ3 na sprint quali); null fora da classificação
+  q1: number | null
+  q2: number | null
+  q3: number | null
 }
 
 /** Uma linha de laps.json */
@@ -146,6 +150,10 @@ export interface Lap {
   endTime: number | null
   pitInTime: number | null
   pitOutTime: number | null
+  personalBest: boolean
+  deleted: boolean | null // volta anulada (limite de pista etc.)
+  speedTrap: number | null // km/h no speed trap
+  segment: number | null // 1/2/3 em Q e SQ
 }
 
 /** track.json — coordenadas em metros */

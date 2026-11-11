@@ -21,6 +21,10 @@ const lap = (driver: string, n: number, endTime: number, extra: Partial<Lap> = {
   endTime,
   pitInTime: null,
   pitOutTime: null,
+  personalBest: false,
+  deleted: null,
+  speedTrap: null,
+  segment: null,
   ...extra,
 })
 
@@ -35,6 +39,9 @@ const res = (driver: string, grid: number, classified = '1'): DriverResult => ({
   gridPosition: grid,
   status: null,
   points: null,
+  q1: null,
+  q2: null,
+  q3: null,
 })
 
 describe('positionAt', () => {
