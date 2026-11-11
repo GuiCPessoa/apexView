@@ -1,38 +1,20 @@
 import { useMemo } from 'react'
 import { loadCalendar } from '../lib/data'
-import { routeHref, useAsync, type SessionTab } from '../lib/route'
+import { routeHref, useAsync } from '../lib/route'
+import { SESSION_LABEL } from '../lib/session'
 import type { DataIndex, SessionIndexEntry } from '../types/data'
 
-const SESSION_LABEL: Record<string, string> = {
-  FP1: 'Treino 1',
-  FP2: 'Treino 2',
-  FP3: 'Treino 3',
-  SQ: 'Quali sprint',
-  S: 'Sprint',
-  Q: 'Classificação',
-  R: 'Corrida',
-}
 const SESSION_ORDER = ['FP1', 'SQ', 'FP2', 'FP3', 'S', 'Q', 'R']
 
 interface Props {
   index: DataIndex
   current: SessionIndexEntry
-  tab: SessionTab
 }
 
-/** Abas que só existem em alguns tipos de sessão; ao trocar de sessão, cai em "Resultados" se não existir. */
-function tabFor(tab: SessionTab, code: string): SessionTab {
-  const race = code === 'R' || code === 'S'
-  if ((tab === 'race' || tab === 'replay') && !race) return 'results'
-  if (tab === 'laps' && race) return 'results'
-  return tab
-}
-
-const go = (s: SessionIndexEntry, tab: SessionTab) =>
-  (window.location.hash = routeHref({ view: 'session', path: s.path, tab: tabFor(tab, s.session) }))
+const go = (s: SessionIndexEntry) => (window.location.hash = routeHref({ view: 'session', path: s.path }))
 
 /** Filtro de ano → corrida → sessão, a partir do index.json e do calendário do ano. */
-export default function SessionPicker({ index, current, tab }: Props) {
+export default function SessionPicker({ index, current }: Props) {
   const years = useMemo(
     () => [...new Set(index.sessions.map((s) => s.year))].sort((a, b) => b - a),
     [index.sessions],
@@ -63,12 +45,12 @@ export default function SessionPicker({ index, current, tab }: Props) {
     const ss = index.sessions.filter((s) => s.year === year)
     const lastRound = Math.max(...ss.map((s) => s.round))
     const target = pickIn(ss.filter((s) => s.round === lastRound))
-    if (target) go(target, tab)
+    if (target) go(target)
   }
 
   const onRound = (round: number) => {
     const target = pickIn(exportedRounds.get(round) ?? [])
-    if (target) go(target, tab)
+    if (target) go(target)
   }
 
   return (
@@ -102,7 +84,7 @@ export default function SessionPicker({ index, current, tab }: Props) {
             key={s.path}
             className={s.path === current.path ? 'active' : undefined}
             aria-pressed={s.path === current.path}
-            onClick={() => go(s, tab)}
+            onClick={() => go(s)}
           >
             {SESSION_LABEL[s.session] ?? s.sessionName}
           </button>

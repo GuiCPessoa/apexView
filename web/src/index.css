@@ -1,35 +1,25 @@
 :root {
-  --bg: #f6f6f4;
-  --surface: #ffffff;
-  --text: #15151a;
-  --muted: #6b6b76;
-  --border: #e3e3e0;
+  /* Tema escuro de "pit wall": fundo quase preto, cartões grafite, vermelho de destaque */
+  --bg: #0a0a0c;
+  --surface: #131317;
+  --surface-2: #1a1a20;
+  --text: #ececf0;
+  --muted: #8b8b97;
+  --border: #25252c;
   --accent: #e10600;
-  --up: #12805c;
-  --down: #c2410c;
-  --fastest: #8b2fc9;
+  --accent-soft: rgba(225, 6, 0, 0.14);
+  --up: #34d399;
+  --down: #fb923c;
+  --fastest: #c084fc;
 
-  --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --sans: 'Titillium Web', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   font: 15px/1.45 var(--sans);
-  color-scheme: light dark;
+  color-scheme: dark;
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f0f12;
-    --surface: #17171c;
-    --text: #ececf0;
-    --muted: #9a9aa6;
-    --border: #2a2a31;
-    --up: #34d399;
-    --down: #fb923c;
-    --fastest: #c084fc;
-  }
 }
 
 * {
@@ -42,22 +32,35 @@ body {
 }
 
 main {
-  max-width: 1240px;
+  max-width: 1480px;
   margin: 0 auto;
-  padding: 24px 16px 48px;
+  padding: 20px 20px 48px;
 }
 
+/* Barra superior fixa */
 .top {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(10, 10, 12, 0.88);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+
+.top-inner {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 0 20px;
+  height: 56px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px 20px;
+  gap: 20px;
   align-items: center;
-  margin-bottom: 28px;
 }
 
 .logo {
   font-size: 22px;
-  font-weight: 800;
+  font-weight: 900;
+  font-style: italic;
   letter-spacing: -0.02em;
   color: var(--text);
   text-decoration: none;
@@ -69,16 +72,19 @@ main {
 
 .tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .tabs a {
-  padding: 7px 12px;
-  border-radius: 8px;
+  padding: 6px 14px;
+  border-radius: 6px;
   color: var(--muted);
   text-decoration: none;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .tabs a:hover {
@@ -87,8 +93,8 @@ main {
 
 .tabs a.active {
   color: var(--text);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: linear-gradient(90deg, rgba(225, 6, 0, 0.35), rgba(225, 6, 0, 0.04));
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 select {
@@ -433,77 +439,7 @@ code {
   }
 }
 
-/* Abas internas da sessão */
-.subtabs {
-  display: flex;
-  gap: 4px;
-  margin: -6px 0 16px;
-  border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.subtabs > * {
-  white-space: nowrap;
-}
-
-.subtabs a,
-.subtabs span {
-  padding: 8px 12px;
-  margin-bottom: -1px;
-  border-bottom: 2px solid transparent;
-  color: var(--muted);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.subtabs a:hover {
-  color: var(--text);
-}
-
-.subtabs a.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-}
-
-.subtabs .disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
 /* Replay */
-.replay-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(250px, 1fr);
-  gap: 16px;
-  align-items: start;
-}
-
-.map-card {
-  position: relative;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px;
-}
-
-.map-hud {
-  position: absolute;
-  inset: 12px 14px auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: var(--muted);
-  pointer-events: none;
-}
-
-.map-hud strong {
-  color: var(--text);
-  font-size: 18px;
-}
-
 .flag {
   font-size: 12px;
   font-weight: 700;
@@ -740,37 +676,6 @@ code {
 .speeds button.active {
   color: var(--text);
   border-color: var(--text);
-}
-
-@media (max-width: 860px) {
-  /* no celular: mapa, controles e só depois a torre */
-  .replay {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .replay-grid {
-    display: contents;
-  }
-
-  .map-card {
-    order: 1;
-    padding-top: 40px;
-  }
-
-  .replay-controls {
-    order: 2;
-    margin-top: 0;
-  }
-
-  .tower {
-    order: 3;
-  }
-
-  .replay .foot {
-    order: 4;
-  }
 }
 
 /* Telemetria */
@@ -1112,7 +1017,7 @@ code {
   margin-top: 4px;
 }
 
-.strategy-axis span {
+.strategy-axis .strategy-track span {
   position: absolute;
   transform: translateX(-50%);
   font-size: 11px;
@@ -1196,63 +1101,62 @@ code {
   font-size: 9px;
 }
 
-/* Filtro de sessões */
+/* Filtro de sessões: ano, corrida e sessão numa linha */
 .session-picker {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 22px;
-  padding: 12px 14px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+  margin-bottom: 4px;
 }
 
 .picker-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  flex: 1;
+  min-width: 0;
 }
 
 .picker-row label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
 }
 
 .picker-row label.grow {
-  flex: 1;
-  min-width: 220px;
+  flex: 0 1 340px;
+  min-width: 200px;
 }
 
 .picker-row label > span {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.1em;
   color: var(--muted);
-}
-
-.picker-row select {
-  background: var(--bg);
 }
 
 .session-pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
 }
 
 .session-pills button {
   font: inherit;
   font-size: 14px;
-  font-weight: 600;
-  padding: 6px 12px;
+  font-weight: 700;
+  padding: 5px 14px;
   color: var(--muted);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 999px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
   cursor: pointer;
 }
 
@@ -1263,5 +1167,457 @@ code {
 .session-pills button.active {
   color: #fff;
   background: var(--accent);
+}
+
+/* ---------- Painel da sessão ---------- */
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px 24px;
+  padding: 22px 0 18px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  background: radial-gradient(600px 180px at 0% 100%, rgba(225, 6, 0, 0.16), transparent 70%);
+}
+
+.kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.hero h1 {
+  margin: 2px 0 0;
+  font-size: clamp(30px, 4.2vw, 48px);
+  line-height: 1;
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+
+.hero-title p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.hero-stats .stat {
+  min-width: 150px;
+  padding: 10px 16px;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.focus-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 12px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+}
+
+.focus-bar.on {
+  border-style: solid;
+  border-color: rgba(225, 6, 0, 0.5);
+  background: var(--accent-soft);
+}
+
+.dash {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.span-4 {
+  grid-column: span 4;
+}
+
+.span-6 {
+  grid-column: span 6;
+}
+
+.span-8 {
+  grid-column: span 8;
+}
+
+.span-12 {
+  grid-column: span 12;
+}
+
+.card {
+  min-width: 0;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  scroll-margin-top: 72px;
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-bottom: 12px;
+}
+
+.card-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text);
+}
+
+.card-head h2::before {
+  content: '';
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.card-aside {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  font-size: 13px;
+}
+
+.card .foot {
+  margin-bottom: 0;
+}
+
+.loading {
+  margin: 0;
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* elementos dentro do cartão não repetem o fundo/borda do cartão */
+.card .table-wrap,
+.card .strategy,
+.card .tcharts,
+.card .tower {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.card .readout {
+  background: var(--bg);
+}
+
+.stat,
+.readout,
+.notice,
+.chip,
+select,
+.icon-btn,
+.speeds button,
+.lap-picker {
+  background-color: var(--surface-2);
+}
+
+/* foco de piloto */
+.clickable {
+  cursor: pointer;
+}
+
+tr.clickable:hover td,
+.strategy-row.clickable:hover {
+  background: var(--surface-2);
+}
+
+tr.focused td {
+  background: var(--accent-soft);
+}
+
+tr.focused td:first-child {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.dim {
+  opacity: 0.38;
+}
+
+.dim:hover {
+  opacity: 0.8;
+}
+
+/* tabelas compactas dos cartões */
+table.compact th,
+table.compact td {
+  padding: 6px 8px;
+}
+
+.team-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.quali-results .team-name {
+  display: none;
+}
+
+.results-card .team-bar,
+table.compact .team-bar {
+  height: 16px;
+}
+
+.scroll-y {
+  max-height: 340px;
+  overflow: auto;
+}
+
+.picker-row select {
+  width: 100%;
+}
+
+/* replay */
+.lap-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.lap-count strong {
+  color: var(--text);
+  font-size: 17px;
+}
+
+.track-map {
+  max-height: min(50vh, 520px);
+}
+
+.track-outer {
+  stroke: #2c2c34;
+}
+
+.track-inner {
+  stroke: #4a4a55;
+}
+
+.car-dot.on {
+  stroke: #fff;
+}
+
+.car.dim {
+  opacity: 0.4;
+}
+
+.tower li {
+  padding: 4px 8px;
+}
+
+.tower li.focused {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.replay-controls {
+  margin-top: 8px;
+}
+
+.timeline {
+  position: relative;
+  flex: 1;
+  min-width: 160px;
+  height: 28px;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 12px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent) var(--pct), #2a2a31 var(--pct));
+}
+
+.timeline-band {
+  position: absolute;
+  top: 10px;
+  height: 8px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.timeline input[type='range']:focus {
+  outline: none;
+}
+
+.timeline input[type='range']:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(225, 6, 0, 0.45);
+}
+
+.timeline input[type='range'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.timeline input[type='range']::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.timeline input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent);
+}
+
+.timeline input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent);
+}
+
+.icon-btn.play {
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+}
+
+.clock {
+  min-width: 128px;
+  text-align: right;
+}
+
+.speeds button.active {
   border-color: var(--accent);
+}
+
+/* estratégia: cursor da volta do replay */
+.strategy-rows {
+  position: relative;
+}
+
+.strategy-row.clickable {
+  border-radius: 4px;
+}
+
+.strategy-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(62px + (100% - 62px) * var(--x));
+  z-index: 1;
+  border-left: 1px dashed rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+}
+
+.tele-summary {
+  grid-template-columns: minmax(0, 1fr) 150px;
+}
+
+.foot.span-12 {
+  margin: 0;
+}
+
+@media (max-width: 1100px) {
+  .span-4,
+  .span-6,
+  .span-8 {
+    grid-column: span 12;
+  }
+
+  .scroll-y {
+    max-height: none;
+  }
+}
+
+@media (max-width: 640px) {
+  main {
+    padding: 14px 12px 40px;
+  }
+
+  .top-inner {
+    padding: 0 12px;
+    gap: 12px;
+  }
+
+  .card {
+    padding: 12px;
+  }
+
+  .hero-stats .stat {
+    min-width: 0;
+    flex: 1 1 140px;
+  }
+
+  .session-picker {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .picker-row label.grow {
+    flex: 1 1 200px;
+  }
+
+  .session-pills button {
+    flex: 1;
+  }
+
+  .logo {
+    font-size: 19px;
+  }
+
+  .tabs a {
+    padding: 6px 9px;
+  }
+
+  .clock {
+    min-width: 0;
+  }
 }

@@ -1,134 +1,96 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type uPlot from 'uplot'
 import UPlotChart from '../components/UPlotChart'
 import { chartTheme, lapBandsPlugin } from '../lib/chart'
-import { formatLapTime } from '../lib/data'
-import {
-  gapsByLap,
-  neutralizedLaps,
-  pitStops,
-  positionsByLap,
-  raceDrivers,
-  stintsOf,
-  totalLaps,
-  type RaceDriver,
-} from '../lib/race'
-import { fastestLap } from '../lib/telemetry'
+import { formatLapTime, formatPoints } from '../lib/data'
+import { dimmed } from '../lib/focus'
+import { gapsByLap, positionsByLap, stintsOf, type PitStop, type RaceDriver } from '../lib/race'
+import { COMPOUND } from '../lib/tyres'
 import type { DriverResult, Lap } from '../types/data'
-
-interface Props {
-  results: DriverResult[]
-  laps: Lap[]
-}
-
-// letra no padrão da F1 (S/M/H/I/W), igual ao replay
-const COMPOUND: Record<string, { label: string; letter: string; className: string }> = {
-  SOFT: { label: 'Macio', letter: 'S', className: 'soft' },
-  MEDIUM: { label: 'Médio', letter: 'M', className: 'medium' },
-  HARD: { label: 'Duro', letter: 'H', className: 'hard' },
-  INTERMEDIATE: { label: 'Intermediário', letter: 'I', className: 'inter' },
-  WET: { label: 'Chuva', letter: 'W', className: 'wet' },
-}
 
 // marcações do eixo de voltas só em números inteiros
 const LAP_INCRS = [1, 2, 5, 10, 20, 50]
 
-export default function RaceView({ results, laps }: Props) {
-  const drivers = useMemo(() => raceDrivers(results), [results])
-  const n = useMemo(() => totalLaps(laps), [laps])
-  const bands = useMemo(() => neutralizedLaps(laps), [laps])
-  const stops = useMemo(() => pitStops(laps, drivers.map((d) => d.driver)), [laps, drivers])
-
-  return (
-    <div className="race">
-      <Highlights results={results} laps={laps} stops={stops} drivers={drivers} />
-
-      <section className="race-section">
-        <h2>Posições volta a volta</h2>
-        <PositionsChart drivers={drivers} results={results} laps={laps} n={n} bands={bands} />
-      </section>
-
-      <section className="race-section">
-        <h2>Estratégia de pneus</h2>
-        <Strategy drivers={drivers} laps={laps} n={n} />
-      </section>
-
-      <section className="race-section">
-        <h2>Diferença para o líder</h2>
-        <GapsChart drivers={drivers} laps={laps} n={n} bands={bands} />
-      </section>
-
-      <section className="race-section">
-        <h2>Pit stops</h2>
-        <PitTable stops={stops} drivers={drivers} />
-      </section>
-
-      {bands.size > 0 && (
-        <p className="foot">
-          Faixas amarelas: voltas com safety car (mais forte) ou VSC (mais fraca). Faixa vermelha: bandeira vermelha.
-        </p>
-      )}
-    </div>
-  )
+/** Props comuns: pilotos em foco e o clique que liga/desliga o foco. */
+export interface FocusProps {
+  focus: string[]
+  onToggle: (driver: string) => void
 }
 
-// ---------- Destaques ----------
+type Bands = Map<number, 'sc' | 'vsc' | 'red'>
 
-function Highlights({
+/** Mantém a função mais recente num ref (para hooks do uPlot sem recriar o gráfico). */
+function useLatest<T>(value: T) {
+  const ref = useRef(value)
+  useEffect(() => {
+    ref.current = value
+  }, [value])
+  return ref
+}
+
+// ---------- Resultado compacto ----------
+
+export function RaceResults({
   results,
   laps,
-  stops,
-  drivers,
-}: Props & { stops: ReturnType<typeof pitStops>; drivers: RaceDriver[] }) {
-  const gained = results
-    .filter((r) => r.position != null && r.gridPosition && /^\d+$/.test(r.classifiedPosition ?? ''))
-    .map((r) => ({ r, delta: r.gridPosition! - r.position! }))
-    .sort((a, b) => b.delta - a.delta)[0]
-  const fastestStop = stops.filter((s) => s.pitLaneTime != null).sort((a, b) => a.pitLaneTime! - b.pitLaneTime!)[0]
-  const fl = fastestLap(laps)
-  const color = (d: string) => drivers.find((x) => x.driver === d)?.color ?? 'var(--muted)'
+  focus,
+  onToggle,
+}: { results: DriverResult[]; laps: Lap[] } & FocusProps) {
+  const bestLaps = useMemo(() => {
+    const best = new Map<string, number>()
+    for (const l of laps) {
+      if (l.lapTime == null || l.deleted) continue
+      const cur = best.get(l.driver)
+      if (cur == null || l.lapTime < cur) best.set(l.driver, l.lapTime)
+    }
+    return best
+  }, [laps])
+  const fastest = Math.min(...bestLaps.values())
+  const sorted = [...results].sort((a, b) => (a.position ?? 99) - (b.position ?? 99))
 
   return (
-    <div className="highlights">
-      {gained && gained.delta > 0 && (
-        <div className="stat">
-          <span className="stat-label">Mais posições ganhas</span>
-          <span className="stat-value">
-            <span className="team-bar" style={{ background: color(gained.r.driver) }} />
-            {gained.r.driver} <span className="up">+{gained.delta}</span>
-          </span>
-          <span className="stat-sub">
-            Largou em {gained.r.gridPosition}º, terminou em {gained.r.position}º
-          </span>
-        </div>
-      )}
-      {fl && (
-        <div className="stat">
-          <span className="stat-label">Volta mais rápida</span>
-          <span className="stat-value">
-            <span className="team-bar" style={{ background: color(fl.driver) }} />
-            {fl.driver} <span className="mono">{formatLapTime(fl.lapTime)}</span>
-          </span>
-          <span className="stat-sub">Volta {fl.lap}</span>
-        </div>
-      )}
-      {fastestStop && (
-        <div className="stat">
-          <span className="stat-label">Pit stop mais rápido</span>
-          <span className="stat-value">
-            <span className="team-bar" style={{ background: color(fastestStop.driver) }} />
-            {fastestStop.driver} <span className="mono">{fastestStop.pitLaneTime!.toFixed(1)} s</span>
-          </span>
-          <span className="stat-sub">Tempo no pit lane, volta {fastestStop.lap}</span>
-        </div>
-      )}
-      <div className="stat">
-        <span className="stat-label">Pit stops</span>
-        <span className="stat-value">{stops.filter((s) => s.pitLaneTime != null).length}</span>
-        <span className="stat-sub">
-          {new Set(stops.filter((s) => s.pitLaneTime != null).map((s) => s.driver)).size} pilotos trocaram pneus
-        </span>
-      </div>
+    <div className="table-wrap">
+      <table className="compact">
+        <thead>
+          <tr>
+            <th className="num">Pos</th>
+            <th>Piloto</th>
+            <th className="num" title="Posições ganhas ou perdidas desde o grid">
+              Grid
+            </th>
+            <th className="num hide-sm">Melhor volta</th>
+            <th className="num">Pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((r) => {
+            const gained = r.position != null && r.gridPosition ? r.gridPosition - r.position : null
+            const finished = /^\d+$/.test(r.classifiedPosition ?? '')
+            const best = bestLaps.get(r.driver) ?? null
+            return (
+              <tr
+                key={r.driver}
+                className={`clickable ${focus.includes(r.driver) ? 'focused' : ''} ${dimmed(focus, r.driver) ? 'dim' : ''}`}
+                onClick={() => onToggle(r.driver)}
+              >
+                <td className="num pos">{finished ? r.position : (r.classifiedPosition ?? '—')}</td>
+                <td>
+                  <span className="driver">
+                    <span className="team-bar" style={{ background: r.teamColor ?? 'var(--muted)' }} />
+                    <strong>{r.driver}</strong>
+                    <span className="team-name">{finished || r.status === 'Lapped' ? r.team : r.status}</span>
+                  </span>
+                </td>
+                <td className={`num delta ${gained == null ? '' : gained > 0 ? 'up' : gained < 0 ? 'down' : ''}`}>
+                  {r.gridPosition === 0 ? 'Pit' : gained == null ? '—' : gained > 0 ? `▲${gained}` : gained < 0 ? `▼${-gained}` : '='}
+                </td>
+                <td className={`num mono hide-sm ${best === fastest ? 'fastest' : ''}`}>{formatLapTime(best)}</td>
+                <td className="num points">{r.points ? formatPoints(r.points) : ''}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -142,7 +104,7 @@ function endLabelsPlugin(drivers: RaceDriver[]): uPlot.Plugin {
       draw: (u) => {
         const ctx = u.ctx
         ctx.save()
-        ctx.font = `600 ${11 * devicePixelRatio}px system-ui, sans-serif`
+        ctx.font = `700 ${11 * devicePixelRatio}px 'Titillium Web', system-ui, sans-serif`
         ctx.textBaseline = 'middle'
         const labels: { d: RaceDriver; x: number; y: number; alpha: number }[] = []
         drivers.forEach((d, i) => {
@@ -178,20 +140,57 @@ function endLabelsPlugin(drivers: RaceDriver[]): uPlot.Plugin {
   }
 }
 
-function PositionsChart({
+/** Série de um piloto com destaque do foco (linha grossa) e os demais apagados. */
+function seriesFor(d: RaceDriver, focus: string[], extra: Partial<uPlot.Series> = {}): uPlot.Series {
+  const on = focus.includes(d.driver)
+  return {
+    label: d.driver,
+    stroke: d.color,
+    width: on ? 3 : 1.6,
+    alpha: dimmed(focus, d.driver) ? 0.18 : 1,
+    dash: d.dashed ? [6, 4] : undefined,
+    points: { show: false },
+    ...extra,
+  }
+}
+
+/** Clique perto de uma linha liga/desliga o foco do piloto. */
+function clickToFocus(drivers: RaceDriver[], onToggle: { current: (d: string) => void }): uPlot.Plugin {
+  let hovered: number | null = null
+  return {
+    hooks: {
+      setSeries: (_u, idx) => {
+        hovered = idx ?? null
+      },
+      ready: (u) => {
+        u.over.style.cursor = 'pointer'
+        u.over.addEventListener('click', () => {
+          if (hovered) onToggle.current(drivers[hovered - 1].driver)
+        })
+      },
+    },
+  }
+}
+
+export function PositionsChart({
   drivers,
   results,
   laps,
   n,
   bands,
+  focus,
+  onToggle,
+  cursorLap,
 }: {
   drivers: RaceDriver[]
   results: DriverResult[]
   laps: Lap[]
   n: number
-  bands: Map<number, 'sc' | 'vsc' | 'red'>
-}) {
-  const [focus, setFocus] = useState<{ driver: string | null; lap: number | null }>({ driver: null, lap: null })
+  bands: Bands
+  cursorLap: number | null
+} & FocusProps) {
+  const [hover, setHover] = useState<{ driver: string | null; lap: number | null }>({ driver: null, lap: null })
+  const toggleRef = useLatest(onToggle)
   const positions = useMemo(() => positionsByLap(laps, results), [laps, results])
   const data = useMemo(
     () => [Array.from({ length: n + 1 }, (_, i) => i), ...drivers.map((d) => positions.get(d.driver)!)] as uPlot.AlignedData,
@@ -225,29 +224,18 @@ function PositionsChart({
             values: (_u, vals) => vals.map((v) => (v === 1 || v % 5 === 0 ? String(v) : '')),
           },
         ],
-        series: [
-          { label: 'Volta' },
-          ...drivers.map((d) => ({
-            label: d.driver,
-            stroke: d.color,
-            width: 2,
-            dash: d.dashed ? [6, 4] : undefined,
-            points: { show: false },
-          })),
-        ],
-        plugins: [lapBandsPlugin(bands), endLabelsPlugin(drivers)],
+        series: [{ label: 'Volta' }, ...drivers.map((d) => seriesFor(d, focus))],
+        plugins: [lapBandsPlugin(bands), endLabelsPlugin(drivers), clickToFocus(drivers, toggleRef)],
         hooks: {
-          setSeries: [
-            (_u, idx) => setFocus((f) => ({ ...f, driver: idx ? drivers[idx - 1].driver : null })),
-          ],
-          setCursor: [(u) => setFocus((f) => ({ ...f, lap: u.cursor.idx ?? null }))],
+          setSeries: [(_u, idx) => setHover((f) => ({ ...f, driver: idx ? drivers[idx - 1].driver : null }))],
+          setCursor: [(u) => setHover((f) => ({ ...f, lap: u.cursor.idx ?? null }))],
         },
       }
     },
-    [drivers, n, count, bands],
+    [drivers, n, count, bands, focus, toggleRef],
   )
 
-  const fd = focus.driver ? drivers.find((d) => d.driver === focus.driver) : null
+  const fd = hover.driver ? drivers.find((d) => d.driver === hover.driver) : null
   const fr = fd ? results.find((r) => r.driver === fd.driver) : null
   const row = fd ? positions.get(fd.driver)! : null
   return (
@@ -256,63 +244,75 @@ function PositionsChart({
         {fd && fr ? (
           <>
             <span>
-              <i style={{ background: fd.color }} /> <b>{fd.driver}</b> {fd.fullName}
+              <i style={{ background: fd.color }} /> <b>{fd.driver}</b>
             </span>
             <span className="muted">
               Largou {fr.gridPosition ? `em ${fr.gridPosition}º` : 'do pit lane'} ·{' '}
               {/^\d+$/.test(fr.classifiedPosition ?? '') ? `terminou em ${fr.position}º` : `não terminou (${fr.status})`}
             </span>
-            {focus.lap != null && row && row[focus.lap] != null && (
+            {hover.lap != null && row && row[hover.lap] != null && (
               <span>
-                {focus.lap === 0 ? 'Grid' : `Volta ${focus.lap}`}: <b>{row[focus.lap]}º</b>
+                {hover.lap === 0 ? 'Grid' : `Volta ${hover.lap}`}: <b>{row[hover.lap]}º</b>
               </span>
             )}
           </>
         ) : (
-          <span className="muted">Passe o mouse perto de uma linha para destacar o piloto.</span>
+          <span className="muted">Passe o mouse perto de uma linha para ver o piloto; clique para pôr em foco.</span>
         )}
       </div>
-      <div className="chart-card">
-        <UPlotChart options={options} data={data} height={Math.max(360, count * 22)} />
-      </div>
+      <UPlotChart options={options} data={data} height={Math.max(360, count * 21)} cursorLap={cursorLap} />
     </>
   )
 }
 
 // ---------- Estratégia ----------
 
-function Strategy({ drivers, laps, n }: { drivers: RaceDriver[]; laps: Lap[]; n: number }) {
+export function Strategy({
+  drivers,
+  laps,
+  n,
+  focus,
+  onToggle,
+  cursorLap,
+}: { drivers: RaceDriver[]; laps: Lap[]; n: number; cursorLap: number | null } & FocusProps) {
   const ticks = Array.from({ length: Math.floor(n / 10) + 1 }, (_, i) => i * 10).filter((t) => t > 0)
   return (
     <div className="strategy">
-      {drivers.map((d) => {
-        const stints = stintsOf(laps, d.driver)
-        return (
-          <div key={d.driver} className="strategy-row">
-            <span className="strategy-driver">
-              <span className="team-bar" style={{ background: d.color }} />
-              {d.driver}
-            </span>
-            <div className="strategy-track">
-              {stints.map((s) => {
-                const c = COMPOUND[s.compound ?? ''] ?? { label: s.compound ?? '?', letter: '?', className: 'unknown' }
-                const len = s.endLap - s.startLap + 1
-                const used = s.fresh === false
-                return (
-                  <span
-                    key={`${s.stint}-${s.startLap}`}
-                    className={`stint ${c.className} ${used ? 'used' : ''}`}
-                    style={{ left: `${((s.startLap - 1) / n) * 100}%`, width: `${(len / n) * 100}%` }}
-                    title={`${c.label} ${used ? `usado (${s.startLife} voltas)` : 'novo'} · voltas ${s.startLap}–${s.endLap} (${len})`}
-                  >
-                    {len}
-                  </span>
-                )
-              })}
+      <div className="strategy-rows">
+        {cursorLap != null && <span className="strategy-cursor" style={{ ['--x' as string]: cursorLap / n }} />}
+        {drivers.map((d) => {
+          const stints = stintsOf(laps, d.driver)
+          return (
+            <div
+              key={d.driver}
+              className={`strategy-row clickable ${focus.includes(d.driver) ? 'focused' : ''} ${dimmed(focus, d.driver) ? 'dim' : ''}`}
+              onClick={() => onToggle(d.driver)}
+            >
+              <span className="strategy-driver">
+                <span className="team-bar" style={{ background: d.color }} />
+                {d.driver}
+              </span>
+              <div className="strategy-track">
+                {stints.map((s) => {
+                  const c = COMPOUND[s.compound ?? ''] ?? { label: s.compound ?? '?', letter: '?', className: 'unknown' }
+                  const len = s.endLap - s.startLap + 1
+                  const used = s.fresh === false
+                  return (
+                    <span
+                      key={`${s.stint}-${s.startLap}`}
+                      className={`stint ${c.className} ${used ? 'used' : ''}`}
+                      style={{ left: `${((s.startLap - 1) / n) * 100}%`, width: `${(len / n) * 100}%` }}
+                      title={`${c.label} ${used ? `usado (${s.startLife} voltas)` : 'novo'} · voltas ${s.startLap}–${s.endLap} (${len})`}
+                    >
+                      {len}
+                    </span>
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
       <div className="strategy-row strategy-axis">
         <span className="strategy-driver" />
         <div className="strategy-track">
@@ -342,20 +342,26 @@ function Strategy({ drivers, laps, n }: { drivers: RaceDriver[]; laps: Lap[]; n:
 
 // ---------- Gaps ----------
 
-function GapsChart({
+export function GapsChart({
   drivers,
   laps,
   n,
   bands,
+  focus,
+  cursorLap,
 }: {
   drivers: RaceDriver[]
   laps: Lap[]
   n: number
-  bands: Map<number, 'sc' | 'vsc' | 'red'>
+  bands: Bands
+  focus: string[]
+  cursorLap: number | null
 }) {
-  const [visible, setVisible] = useState<Set<string>>(
+  const [picked, setPicked] = useState<Set<string>>(
     () => new Set(drivers.filter((d) => d.finish != null && d.finish <= 10).map((d) => d.driver)),
   )
+  // pilotos em foco sempre aparecem
+  const visible = useMemo(() => new Set([...picked, ...focus]), [picked, focus])
   const gaps = useMemo(() => gapsByLap(laps, drivers.map((d) => d.driver)), [laps, drivers])
   const data = useMemo(
     () => [Array.from({ length: n + 1 }, (_, i) => i), ...drivers.map((d) => gaps.get(d.driver)!)] as uPlot.AlignedData,
@@ -367,6 +373,7 @@ function GapsChart({
       const t = chartTheme()
       return {
         legend: { show: false },
+        padding: [8, 44, 0, 0],
         focus: { alpha: 0.2 },
         cursor: { focus: { prox: 24 }, drag: { x: true, y: false }, points: { size: 6 } },
         scales: {
@@ -394,25 +401,15 @@ function GapsChart({
             values: (_u, vals) => vals.map((v) => `${v} s`),
           },
         ],
-        series: [
-          { label: 'Volta' },
-          ...drivers.map((d) => ({
-            label: d.driver,
-            stroke: d.color,
-            width: 2,
-            dash: d.dashed ? [6, 4] : undefined,
-            show: visible.has(d.driver),
-            points: { show: false },
-          })),
-        ],
+        series: [{ label: 'Volta' }, ...drivers.map((d) => seriesFor(d, focus, { show: visible.has(d.driver) }))],
         plugins: [lapBandsPlugin(bands), endLabelsPlugin(drivers)],
       }
     },
-    [drivers, n, bands, visible],
+    [drivers, n, bands, visible, focus],
   )
 
   const toggle = (d: string) =>
-    setVisible((v) => {
+    setPicked((v) => {
       const next = new Set(v)
       if (next.has(d)) next.delete(d)
       else next.add(d)
@@ -434,16 +431,14 @@ function GapsChart({
             {d.driver}
           </button>
         ))}
-        <button className="chip ghost" onClick={() => setVisible(new Set(drivers.map((d) => d.driver)))}>
+        <button className="chip ghost" onClick={() => setPicked(new Set(drivers.map((d) => d.driver)))}>
           Todos
         </button>
-        <button className="chip ghost" onClick={() => setVisible(new Set())}>
+        <button className="chip ghost" onClick={() => setPicked(new Set())}>
           Nenhum
         </button>
       </div>
-      <div className="chart-card">
-        <UPlotChart options={options} data={data} height={320} />
-      </div>
+      <UPlotChart options={options} data={data} height={320} cursorLap={cursorLap} />
       <p className="foot">
         Diferença medida na linha de chegada a cada volta. Arraste no gráfico para dar zoom; duplo clique volta ao normal.
       </p>
@@ -453,17 +448,22 @@ function GapsChart({
 
 // ---------- Pit stops ----------
 
-function PitTable({ stops, drivers }: { stops: ReturnType<typeof pitStops>; drivers: RaceDriver[] }) {
+export function PitTable({
+  stops,
+  drivers,
+  focus,
+  onToggle,
+}: { stops: PitStop[]; drivers: RaceDriver[] } & FocusProps) {
   const [sort, setSort] = useState<'lap' | 'time'>('lap')
   const best = Math.min(...stops.filter((s) => s.pitLaneTime != null).map((s) => s.pitLaneTime!))
   const sorted = [...stops].sort((a, b) =>
     sort === 'lap' ? a.lap - b.lap : (a.pitLaneTime ?? Infinity) - (b.pitLaneTime ?? Infinity),
   )
   const color = (d: string) => drivers.find((x) => x.driver === d)?.color ?? 'var(--muted)'
-  if (stops.length === 0) return <p className="notice">Nenhum pit stop nesta sessão.</p>
+  if (stops.length === 0) return <p className="muted">Nenhum pit stop nesta sessão.</p>
   return (
-    <div className="table-wrap">
-      <table>
+    <div className="scroll-y">
+      <table className="compact">
         <thead>
           <tr>
             <th>Piloto</th>
@@ -474,7 +474,7 @@ function PitTable({ stops, drivers }: { stops: ReturnType<typeof pitStops>; driv
             </th>
             <th className="num">
               <button className={`th-sort ${sort === 'time' ? 'active' : ''}`} onClick={() => setSort('time')}>
-                Tempo no pit lane
+                Pit lane
               </button>
             </th>
             <th>Pneus</th>
@@ -482,7 +482,11 @@ function PitTable({ stops, drivers }: { stops: ReturnType<typeof pitStops>; driv
         </thead>
         <tbody>
           {sorted.map((s) => (
-            <tr key={`${s.driver}-${s.lap}`}>
+            <tr
+              key={`${s.driver}-${s.lap}`}
+              className={`clickable ${focus.includes(s.driver) ? 'focused' : ''} ${dimmed(focus, s.driver) ? 'dim' : ''}`}
+              onClick={() => onToggle(s.driver)}
+            >
               <td>
                 <span className="driver">
                   <span className="team-bar" style={{ background: color(s.driver) }} />
@@ -491,7 +495,7 @@ function PitTable({ stops, drivers }: { stops: ReturnType<typeof pitStops>; driv
               </td>
               <td className="num">{s.lap}</td>
               <td className={`num mono ${s.pitLaneTime === best ? 'fastest' : ''}`}>
-                {s.pitLaneTime != null ? `${s.pitLaneTime.toFixed(1)} s` : 'abandonou nos boxes'}
+                {s.pitLaneTime != null ? `${s.pitLaneTime.toFixed(1)} s` : 'abandono'}
               </td>
               <td>
                 <TyreTag compound={s.from} /> → <TyreTag compound={s.to} />
@@ -504,10 +508,12 @@ function PitTable({ stops, drivers }: { stops: ReturnType<typeof pitStops>; driv
   )
 }
 
-function TyreTag({ compound }: { compound: string | null }) {
+export function TyreTag({ compound }: { compound: string | null }) {
   const c = COMPOUND[compound ?? '']
   if (!c) return <span className="muted">—</span>
-  return <span className={`tyre ${c.className}`} title={c.label}>
+  return (
+    <span className={`tyre ${c.className}`} title={c.label}>
       {c.letter}
     </span>
+  )
 }

@@ -119,3 +119,14 @@ export function evolutionPoints(laps: Lap[], cutoff = 1.07): EvolutionPoint[] {
     .map((l) => ({ driver: l.driver, time: l.endTime!, lapTime: l.lapTime!, compound: l.compound, lap: l.lap! }))
     .sort((a, b) => a.time - b.time)
 }
+
+/** Nome da sessão em português, pelo código do FastF1. */
+export const SESSION_LABEL: Record<string, string> = {
+  FP1: 'Treino 1',
+  FP2: 'Treino 2',
+  FP3: 'Treino 3',
+  SQ: 'Quali sprint',
+  S: 'Sprint',
+  Q: 'Classificação',
+  R: 'Corrida',
+}

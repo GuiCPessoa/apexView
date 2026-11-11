@@ -3,10 +3,12 @@ import type uPlot from 'uplot'
 import UPlotChart from '../components/UPlotChart'
 import { chartTheme } from '../lib/chart'
 import { formatGap, formatLapTime } from '../lib/data'
+import { dimmed } from '../lib/focus'
 import { raceDrivers } from '../lib/race'
 import { evolutionPoints, qualifyingSegments, rankingByBestLap, sessionBestSectors, type Segment } from '../lib/session'
 import type { DriverResult, Lap, SessionMeta } from '../types/data'
-import { TyreBadge } from './SessionResults'
+import type { FocusProps } from './RacePanels'
+import { TyreBadge } from './ResultsPanels'
 
 interface Props {
   meta: SessionMeta
@@ -14,24 +16,9 @@ interface Props {
   laps: Lap[]
 }
 
-export default function LapsView({ meta, results, laps }: Props) {
-  return (
-    <div className="laps-view">
-      <section className="race-section">
-        <h2>Melhores voltas e setores</h2>
-        <SectorsTable results={results} laps={laps} />
-      </section>
-      <section className="race-section">
-        <h2>Evolução da sessão</h2>
-        <EvolutionChart meta={meta} results={results} laps={laps} />
-      </section>
-    </div>
-  )
-}
-
 // ---------- Setores e volta ideal ----------
 
-function SectorsTable({ results, laps }: Omit<Props, 'meta'>) {
+export function SectorsTable({ results, laps, focus, onToggle }: Omit<Props, 'meta'> & FocusProps) {
   const ranking = useMemo(() => rankingByBestLap(laps, results.map((r) => r.driver)), [laps, results])
   const best = sessionBestSectors(ranking)
   const bestSpeed = Math.max(...ranking.map((r) => r.topSpeed ?? 0))
@@ -41,7 +28,7 @@ function SectorsTable({ results, laps }: Omit<Props, 'meta'>) {
   return (
     <>
       <div className="table-wrap">
-        <table>
+        <table className="compact">
           <thead>
             <tr>
               <th className="num">Pos</th>
@@ -62,7 +49,11 @@ function SectorsTable({ results, laps }: Omit<Props, 'meta'>) {
             {ranking.map((row, i) => {
               const r = by.get(row.driver)!
               return (
-                <tr key={row.driver}>
+                <tr
+                  key={row.driver}
+                  className={`clickable ${focus.includes(row.driver) ? 'focused' : ''} ${dimmed(focus, row.driver) ? 'dim' : ''}`}
+                  onClick={() => onToggle(row.driver)}
+                >
                   <td className="num pos">{row.best ? i + 1 : '—'}</td>
                   <td>
                     <span className="driver">
@@ -126,14 +117,16 @@ function segmentsPlugin(segments: Segment[], prefix: string, origin: number, col
   }
 }
 
-function EvolutionChart({ meta, results, laps }: Props) {
+export function EvolutionChart({ meta, results, laps, focus }: Props & { focus: string[] }) {
   const drivers = useMemo(() => {
     const ranking = rankingByBestLap(laps, results.map((r) => r.driver))
     const order = new Map(ranking.map((r, i) => [r.driver, i]))
     // mesma regra de cor/traço da corrida, mas na ordem da melhor volta
     return raceDrivers(results).sort((a, b) => (order.get(a.driver) ?? 99) - (order.get(b.driver) ?? 99))
   }, [laps, results])
-  const [visible, setVisible] = useState<Set<string>>(() => new Set(drivers.slice(0, 6).map((d) => d.driver)))
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(drivers.slice(0, 6).map((d) => d.driver)))
+  // pilotos em foco sempre aparecem
+  const visible = useMemo(() => new Set([...picked, ...focus]), [picked, focus])
   const [hover, setHover] = useState<{ series: number | null; idx: number | null }>({ series: null, idx: null })
 
   const points = useMemo(() => evolutionPoints(laps), [laps])
@@ -180,8 +173,15 @@ function EvolutionChart({ meta, results, laps }: Props) {
             label: d.driver,
             stroke: d.color,
             show: visible.has(d.driver),
+            alpha: dimmed(focus, d.driver) ? 0.25 : 1,
             paths: () => null,
-            points: { show: true, size: 7, width: 2, stroke: d.color, fill: d.dashed ? t.surface : d.color },
+            points: {
+              show: true,
+              size: focus.includes(d.driver) ? 9 : 7,
+              width: 2,
+              stroke: d.color,
+              fill: d.dashed ? t.surface : d.color,
+            },
           })),
         ],
         plugins: segments.length ? [segmentsPlugin(segments, prefix, origin, t.axis)] : [],
@@ -197,11 +197,11 @@ function EvolutionChart({ meta, results, laps }: Props) {
         },
       }
     },
-    [drivers, visible, segments, prefix, origin],
+    [drivers, visible, segments, prefix, origin, focus],
   )
 
   const toggle = (d: string) =>
-    setVisible((v) => {
+    setPicked((v) => {
       const next = new Set(v)
       if (next.has(d)) next.delete(d)
       else next.add(d)
@@ -229,10 +229,10 @@ function EvolutionChart({ meta, results, laps }: Props) {
             {d.driver}
           </button>
         ))}
-        <button className="chip ghost" onClick={() => setVisible(new Set(drivers.map((d) => d.driver)))}>
+        <button className="chip ghost" onClick={() => setPicked(new Set(drivers.map((d) => d.driver)))}>
           Todos
         </button>
-        <button className="chip ghost" onClick={() => setVisible(new Set())}>
+        <button className="chip ghost" onClick={() => setPicked(new Set())}>
           Nenhum
         </button>
       </div>
@@ -254,9 +254,7 @@ function EvolutionChart({ meta, results, laps }: Props) {
           <span className="muted">Passe o mouse num ponto para ver a volta. Arraste para dar zoom.</span>
         )}
       </div>
-      <div className="chart-card">
-        <UPlotChart options={options} data={data} height={340} />
-      </div>
+      <UPlotChart options={options} data={data} height={340} />
       <p className="foot">
         Cada ponto é uma volta válida até 107% da melhor volta da sessão (sem voltas de saída, entrada ou anuladas). O
         2º piloto de cada equipe aparece com ponto vazado.
