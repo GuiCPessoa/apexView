@@ -1,3 +1,4 @@
+import logoIcon from './assets/logo-icon.png'
 import { loadIndex } from './lib/data'
 import { routeHref, useAsync, useRoute, type Route } from './lib/route'
 import CalendarView from './views/CalendarView'
@@ -32,7 +33,10 @@ export default function App() {
       <header className="top">
         <div className="top-inner">
           <a className="logo" href="#/">
-            apex<span>View</span>
+            <img src={logoIcon} alt="" width={28} height={28} />
+            <em>
+              apex<span>View</span>
+            </em>
           </a>
           <nav className="tabs" aria-label="Seções">
             {TABS.map((t) => (
