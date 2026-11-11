@@ -65,11 +65,11 @@ export function compareLaps(a: LapTelemetry, b: LapTelemetry, step = 5): Compari
   return { d, a: ca, b: cb, delta: d.map((_, i) => cb.t[i] - ca.t[i]) }
 }
 
-/** Volta mais rápida de um piloto (ou de todos, sem `driver`) segundo laps.json. */
+/** Volta mais rápida de um piloto (ou de todos, sem `driver`) segundo laps.json. Ignora voltas anuladas. */
 export function fastestLap(laps: Lap[], driver?: string): Lap | null {
   let best: Lap | null = null
   for (const l of laps) {
-    if (l.lapTime == null || l.lap == null || (driver && l.driver !== driver)) continue
+    if (l.lapTime == null || l.lap == null || l.deleted === true || (driver && l.driver !== driver)) continue
     if (!best || l.lapTime < best.lapTime!) best = l
   }
   return best

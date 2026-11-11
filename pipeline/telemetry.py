@@ -11,22 +11,29 @@ import logging
 import numpy as np
 import pandas as pd
 
-from common import to_seconds, to_str
+from common import delta_encode, to_seconds, to_str
 
 log = logging.getLogger(__name__)
 
 DRS_OPEN_MIN = 10  # códigos do live timing: 10, 12 e 14 = asa aberta; 0, 1, 8 = fechada/habilitada
 
 
+ENCODING = "delta"  # d, t, speed e throttle codificados com delta_encode
+
+
 def lap_channels(car: pd.DataFrame) -> dict[str, list]:
-    """Converte o car_data de uma volta (com Distance) em listas compactas."""
+    """Converte o car_data de uma volta (com Distance) em listas compactas.
+
+    d em metros inteiros e t em centésimos de segundo (inteiros); d, t, speed e throttle
+    vão em diferenças (delta_encode). O front decodifica; ver docs/data-format.md.
+    """
     distance = car["Distance"].to_numpy(dtype=float)
     time = car["Time"].dt.total_seconds().to_numpy(dtype=float)
     return {
-        "d": [round(float(v), 1) for v in distance],
-        "t": [round(float(v), 3) for v in time],
-        "speed": [int(round(v)) for v in car["Speed"].to_numpy(dtype=float)],
-        "throttle": [int(np.clip(round(v), 0, 100)) for v in car["Throttle"].to_numpy(dtype=float)],
+        "d": delta_encode([int(round(v)) for v in distance]),
+        "t": delta_encode([int(round(v * 100)) for v in time]),
+        "speed": delta_encode([int(round(v)) for v in car["Speed"].to_numpy(dtype=float)]),
+        "throttle": delta_encode([int(np.clip(round(v), 0, 100)) for v in car["Throttle"].to_numpy(dtype=float)]),
         "brake": [int(bool(v)) for v in car["Brake"].to_numpy()],
         "gear": [int(v) for v in car["nGear"].to_numpy()],
         "drs": [int(v >= DRS_OPEN_MIN) for v in car["DRS"].to_numpy()],
@@ -52,4 +59,4 @@ def build_driver_telemetry(session, driver: str) -> dict | None:
         })
     if not laps_out:
         return None
-    return {"driver": driver, "laps": laps_out}
+    return {"driver": driver, "encoding": ENCODING, "laps": laps_out}

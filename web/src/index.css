@@ -214,6 +214,11 @@ th {
   border: 1px solid var(--border);
 }
 
+.notice.warn {
+  border-color: #d9a400;
+  margin-bottom: 16px;
+}
+
 .notice.error {
   border-color: var(--accent);
 }
@@ -1189,4 +1194,74 @@ code {
   width: 16px;
   height: 16px;
   font-size: 9px;
+}
+
+/* Filtro de sessões */
+.session-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 22px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.picker-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.picker-row label.grow {
+  flex: 1;
+  min-width: 220px;
+}
+
+.picker-row label > span {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.picker-row select {
+  background: var(--bg);
+}
+
+.session-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.session-pills button {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 12px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.session-pills button:hover {
+  color: var(--text);
+}
+
+.session-pills button.active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
 }

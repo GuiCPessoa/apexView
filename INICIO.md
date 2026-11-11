@@ -109,6 +109,8 @@ Teste: `python export_session.py 2024 Monza R`
 
 Calendário e classificação de uma temporada (Jolpica, sem login): `python export_standings.py 2026`
 
+Temporadas inteiras (calendário, classificação e todas as corridas já disputadas, pulando as já exportadas): `python export_season.py 2024 2025 2026`. Use `--sessions R S Q` para incluir sprints e classificações e `--force` para reexportar. A primeira passagem demora (cada corrida baixa ~100 MB para o cache do FastF1, em `pipeline/cache/`); hoje o site versiona só as corridas de 2026 (~2 MB cada). Os dados de 2024 (inclusive o fim de semana completo de Monza usado nas fases 0–5) saíram da versão atual, mas continuam no histórico do git.
+
 > A primeira execução baixa muitos dados e é lenta. Depois, o cache acelera.
 
 > **Versão atual do script:** o código acima é só o ponto de partida. O script real em `pipeline/export_session.py` também grava `meta.json` e `data/index.json`, usa a pasta `{rodada}-{local}` (ex.: `2024/16-monza/R`) e converte `NaN` em `null`. O formato completo está em `docs/data-format.md`.
@@ -136,7 +138,7 @@ printf "pipeline/cache/\npipeline/.venv/\nnode_modules/\n" > .gitignore
 - [x] **Fase 2 — Mapa da pista:** traçado a partir de X/Y de uma volta rápida; replay com slider de tempo. Pronto para corridas e sprints: `export_session.py` gera `track.json`, `track_status.json` e `positions/{DRV}.json.gz` (~40 KB por piloto); aba "Mapa e replay" na sessão
 - [x] **Fase 3 — Telemetria:** comparar duas voltas (velocidade, acelerador, freio, marcha, DRS) alinhadas por distância. `export_session.py` gera `telemetry/{DRV}.json.gz` (amostras originais, até ~130 KB por piloto); aba "Telemetria" com gráficos uPlot sincronizados, delta, setores e mini-mapa
 - [x] **Fase 4 — Corrida:** posições por volta, estratégia de pneus (stints), pit stops, gaps. Aba "Corrida" com destaques, posições volta a volta, estratégia de pneus, diferença para o líder e tabela de pit stops; testes do front com Vitest
-- [x] **Fase 5 — Treinos e classificação:** setores, melhores voltas, evolução por sessão. Resultados com Q1/Q2/Q3 e cortes; treinos ordenados pela melhor volta; aba "Voltas e setores" com volta ideal, speed trap e evolução da sessão (faixas de Q1/Q2/Q3). Monza 2024 exportado completo (TL1–TL3, Q, R)
+- [x] **Fase 5 — Treinos e classificação:** setores, melhores voltas, evolução por sessão. Resultados com Q1/Q2/Q3 e cortes; treinos ordenados pela melhor volta; aba "Voltas e setores" com volta ideal, speed trap e evolução da sessão (faixas de Q1/Q2/Q3). Monza 2024 foi exportado completo para o desenvolvimento; hoje o site traz só as corridas de 2026
 - [ ] **Fase 6 — Ao vivo:** LiveF1 → FastAPI → WebSocket
 
 Cada fase deve terminar com algo **visível e funcionando** no navegador.

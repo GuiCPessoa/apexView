@@ -3,7 +3,7 @@ from datetime import timedelta
 
 import pandas as pd
 
-from common import slugify, to_int, to_seconds, to_str, update_index
+from common import delta_encode, slugify, to_int, to_seconds, to_str, update_index
 
 
 def test_slugify_removes_accents_and_spaces():
@@ -47,3 +47,10 @@ def test_update_index_lists_seasons_and_sessions_sorted(tmp_path):
     assert [e["path"] for e in index["sessions"]] == ["2024/01-sakhir/Q", "2024/16-monza/R"]
     assert index["seasons"] == [{"year": 2024, "afterRound": 24, "totalRounds": 24}]
     assert json.loads((tmp_path / "index.json").read_text()) == index
+
+
+def test_delta_encode_restarts_after_gaps():
+    assert delta_encode([100, 103, None, 50, 52]) == [100, 3, None, 50, 2]
+    assert delta_encode([]) == []
+    assert delta_encode([None, 5]) == [None, 5]
+

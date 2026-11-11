@@ -201,36 +201,38 @@ Mudanças de estado da pista, em ordem. O estado vale até a próxima mudança.
 Um arquivo por piloto, em JSON comprimido com gzip (o front descomprime com `DecompressionStream`).
 
 ```json
-{"driver": "LEC", "start": 3350.494, "hz": 4, "x": [812, 805, ...], "y": [-203, -190, ...]}
+{"driver": "LEC", "start": 3350.494, "hz": 4, "encoding": "delta", "x": [812, -7, ...], "y": [-203, 13, ...]}
 ```
 
 - A amostra `i` corresponde ao tempo de sessão `start + i / hz`. Todos os pilotos usam a mesma grade (`meta.replay`).
-- `x`, `y` são inteiros em metros. `null` quando não há dado real a menos de 3 s (carro na garagem, abandono, falha de transmissão).
-- Monza 2024 (corrida, 77 min): cerca de 40 KB por piloto, 842 KB no total.
+- `x`, `y` são inteiros em metros, **codificados em diferenças** como na telemetria (depois de um `null` o valor volta a ser absoluto). `null` quando não há dado real a menos de 3 s (carro na garagem, abandono, falha de transmissão).
+- Monza 2024 (corrida, 77 min): cerca de 22 KB por piloto, 450 KB no total.
 
 ## `telemetry/{DRV}.json.gz`
 
 Um arquivo por piloto com todas as voltas que têm dados do carro, em JSON comprimido com gzip. São as **amostras originais** do carro (~4 Hz, ~300 por volta em Monza), sem reamostragem. Para comparar duas voltas, o front interpola as duas numa mesma grade de distância.
 
 ```json
-{"driver": "LEC", "laps": [{"lap": 33, "lapTime": 83.226, "compound": "HARD",
-  "d": [9.3, 41.3, ...], "t": [0.0, 0.36, ...], "speed": [331, 333, ...],
-  "throttle": [100, ...], "brake": [0, ...], "gear": [8, ...], "drs": [1, ...]}]}
+{"driver": "LEC", "encoding": "delta", "laps": [{"lap": 33, "lapTime": 83.226, "compound": "HARD",
+  "d": [9, 32, ...], "t": [0, 36, ...], "speed": [331, 2, ...],
+  "throttle": [100, 0, ...], "brake": [0, ...], "gear": [8, ...], "drs": [1, ...]}]}
 ```
+
+**Codificação em diferenças (`"encoding": "delta"`).** Para ocupar menos espaço, `d`, `t`, `speed` e `throttle` guardam a diferença para a amostra anterior; o primeiro valor (e o primeiro depois de um `null`) é absoluto. Decodificar: some acumulando (`deltaDecode` em `web/src/lib/data.ts`, `delta_encode` em `pipeline/common.py`). Arquivos sem o campo `encoding` (formato antigo) trazem os valores absolutos. Isso reduziu a telemetria em ~60%.
 
 | Campo | Tipo | Descrição |
 |---|---|---|
 | `lap` | int | Número da volta |
 | `lapTime` | float \| null | Tempo oficial da volta (s) |
 | `compound` | string \| null | Composto do pneu |
-| `d` | float[] | Distância desde o início da volta (m), crescente |
-| `t` | float[] | Tempo desde o início da volta (s) |
-| `speed` | int[] | Velocidade (km/h) |
-| `throttle` | int[] | Acelerador, 0–100 % (o feed às vezes manda >100; limitado a 100) |
+| `d` | int[] | Distância desde o início da volta (m, inteiro), crescente. Codificado em diferenças |
+| `t` | int[] | Tempo desde o início da volta, em **centésimos de segundo**. Codificado em diferenças (o front converte para segundos) |
+| `speed` | int[] | Velocidade (km/h). Codificado em diferenças |
+| `throttle` | int[] | Acelerador, 0–100 % (o feed às vezes manda >100; limitado a 100). Codificado em diferenças |
 | `brake` | int[] | Freio acionado: 1/0 |
 | `gear` | int[] | Marcha, 0–8 |
 | `drs` | int[] | DRS aberto: 1/0 (códigos 10, 12 e 14 do live timing) |
 
 - Todas as listas de uma volta têm o mesmo tamanho.
 - A distância vem da integração da velocidade (`add_distance` do FastF1). Por isso ela pode terminar alguns metros antes ou depois do comprimento real da volta.
-- Monza 2024 (corrida): até 130 KB por piloto, 2,4 MB no total. O front só baixa os pilotos que estão sendo comparados.
+- Monza 2024 (corrida): ~50 KB por piloto, ~1 MB no total (2,4 MB antes da codificação em diferenças). O front só baixa os pilotos que estão sendo comparados.

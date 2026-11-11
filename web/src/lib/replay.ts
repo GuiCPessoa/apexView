@@ -47,6 +47,17 @@ export function positionAt(p: DriverPositions, t: number): [number, number] | nu
   return [x0 + (x1 - x0) * k, y0 + (y1 - y0) * k]
 }
 
+/** Fração média de amostras com posição conhecida (0–1). Baixa quando o feed falhou. */
+export function positionCoverage(positions: DriverPositions[]): number {
+  if (positions.length === 0) return 0
+  let sum = 0
+  for (const p of positions) {
+    const known = p.x.reduce((n: number, v) => n + (v != null ? 1 : 0), 0)
+    sum += p.x.length ? known / p.x.length : 0
+  }
+  return sum / positions.length
+}
+
 // ---------- Bandeiras ----------
 
 export const TRACK_STATUS_LABEL: Record<TrackStatusCode | 'chequered', string> = {

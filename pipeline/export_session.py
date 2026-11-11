@@ -181,7 +181,7 @@ def export_replay(session, out: Path) -> dict:
     return {"start": start, "end": end, "hz": replay.REPLAY_HZ, "drivers": sorted(positions)}
 
 
-def export_session(year: int, gp: str, ident: str, data_dir: Path = DATA_DIR) -> Path:
+def export_session(year: int, gp: str | int, ident: str, data_dir: Path = DATA_DIR) -> Path:
     setup_cache()
 
     session = fastf1.get_session(year, gp, ident)
@@ -210,5 +210,7 @@ def export_session(year: int, gp: str, ident: str, data_dir: Path = DATA_DIR) ->
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        sys.exit("Uso: python export_session.py <ano> <gp> <sessao>   ex.: 2024 Monza R")
-    export_session(int(sys.argv[1]), sys.argv[2], sys.argv[3])
+        sys.exit("Uso: python export_session.py <ano> <gp|rodada> <sessao>   ex.: 2024 Monza R  ou  2024 16 R")
+    gp = sys.argv[2]
+    # número = rodada do calendário (usado pelo export_season.py); texto = nome/local do GP
+    export_session(int(sys.argv[1]), int(gp) if gp.isdigit() else gp, sys.argv[3])

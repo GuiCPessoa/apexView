@@ -5,6 +5,7 @@ import {
   buildRaceModel,
   formatClock,
   leaderLapsAt,
+  positionCoverage,
   makeProjection,
   positionAt,
   statusAt,
@@ -67,7 +68,19 @@ export default function ReplayView({ path, meta, results, laps }: Props) {
       </p>
     )
   }
-  return <Replay meta={meta} results={results} laps={laps} data={data} />
+  const coverage = positionCoverage(data.positions)
+  return (
+    <>
+      {coverage < 0.8 && (
+        <p className="notice warn">
+          Os dados de posição desta corrida estão incompletos na fonte: só {Math.round(coverage * 100)}% da prova tem a
+          localização dos carros. Em boa parte do replay os carros não aparecem no mapa; a torre, as voltas e a
+          telemetria não são afetadas.
+        </p>
+      )}
+      <Replay meta={meta} results={results} laps={laps} data={data} />
+    </>
+  )
 }
 
 function Replay({ meta, results, laps, data }: Omit<Props, 'path'> & { data: ReplayData }) {

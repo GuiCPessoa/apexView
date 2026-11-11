@@ -78,6 +78,26 @@ def write_json_gz(path: Path, data: Any) -> int:
     return len(payload)
 
 
+def delta_encode(values: list) -> list:
+    """[100, 103, None, 50, 52] -> [100, 3, None, 50, 2].
+
+    Cada valor vira a diferença para o anterior; depois de um None (ou no início)
+    o valor volta a ser absoluto. Listas de diferenças pequenas comprimem bem melhor no gzip.
+    """
+    out, prev = [], None
+    for v in values:
+        if v is None:
+            out.append(None)
+            prev = None
+        elif prev is None:
+            out.append(v)
+            prev = v
+        else:
+            out.append(v - prev)
+            prev = v
+    return out
+
+
 def update_index(data_dir: Path = DATA_DIR) -> dict:
     """Recria data/index.json a partir dos arquivos já exportados."""
     sessions = []

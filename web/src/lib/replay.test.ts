@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DriverResult, Lap } from '../types/data'
-import { buildRaceModel, formatClock, positionAt, statusAt, towerAt } from './replay'
+import { buildRaceModel, formatClock, positionAt, positionCoverage, statusAt, towerAt } from './replay'
 
 const lap = (driver: string, n: number, endTime: number, extra: Partial<Lap> = {}): Lap => ({
   driver,
@@ -92,5 +92,13 @@ describe('statusAt e formatClock', () => {
   it('formata o relógio de prova', () => {
     expect(formatClock(65)).toBe('1:05')
     expect(formatClock(3725)).toBe('1:02:05')
+  })
+})
+
+describe('positionCoverage', () => {
+  it('média da fração de amostras conhecidas por piloto', () => {
+    const p = (x: (number | null)[]) => ({ driver: 'X', start: 0, hz: 1, x, y: x })
+    expect(positionCoverage([p([1, 2, null, null]), p([1, 1, 1, 1])])).toBe(0.75)
+    expect(positionCoverage([])).toBe(0)
   })
 })

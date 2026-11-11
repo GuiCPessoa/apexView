@@ -1,17 +1,19 @@
 import { useMemo } from 'react'
 import { formatLapTime, formatPoints, loadLaps, loadMeta, loadResults } from '../lib/data'
+import SessionPicker from '../components/SessionPicker'
 import { routeHref, useAsync, type SessionTab } from '../lib/route'
 import LapsView from './LapsView'
 import RaceView from './RaceView'
 import { PracticeResults, QualifyingResults } from './SessionResults'
 import ReplayView from './ReplayView'
 import TelemetryView from './TelemetryView'
-import type { DataIndex, DriverResult, Lap, SessionMeta } from '../types/data'
+import type { DataIndex, DriverResult, Lap, SessionIndexEntry, SessionMeta } from '../types/data'
 
 export default function SessionView({ path, tab, index }: { path: string | null; tab: SessionTab; index: DataIndex }) {
   const sessions = index.sessions
-  const current = path ?? sessions[sessions.length - 1]?.path ?? null
-  const known = sessions.some((s) => s.path === current)
+  const current = path ?? defaultSession(sessions)?.path ?? null
+  const entry = sessions.find((s) => s.path === current) ?? null
+  const known = entry != null
 
   const { data, error } = useAsync(
     current && known ? () => Promise.all([loadMeta(current), loadResults(current), loadLaps(current)]) : null,
@@ -32,19 +34,7 @@ export default function SessionView({ path, tab, index }: { path: string | null;
 
   return (
     <section>
-      <div className="toolbar">
-        <select
-          value={current ?? ''}
-          aria-label="Sessão"
-          onChange={(e) => (window.location.hash = routeHref({ view: 'session', path: e.target.value, tab }))}
-        >
-          {[...sessions].reverse().map((s) => (
-            <option key={s.path} value={s.path}>
-              {s.year} · R{s.round} {s.eventName} · {s.sessionName}
-            </option>
-          ))}
-        </select>
-      </div>
+      {entry && <SessionPicker index={index} current={entry} tab={tab} />}
       {!known && <p className="notice">Sessão {current} não exportada.</p>}
       {error && <p className="notice error">{error}</p>}
       {known && !data && !error && <p className="notice">Carregando…</p>}
@@ -113,6 +103,14 @@ export default function SessionView({ path, tab, index }: { path: string | null;
       )}
     </section>
   )
+}
+
+/** Sessão padrão: a corrida da rodada mais recente exportada (ou qualquer sessão dela). */
+function defaultSession(sessions: SessionIndexEntry[]): SessionIndexEntry | undefined {
+  if (sessions.length === 0) return undefined
+  const latest = sessions.reduce((a, b) => (b.year > a.year || (b.year === a.year && b.round > a.round) ? b : a))
+  const sameRound = sessions.filter((s) => s.year === latest.year && s.round === latest.round)
+  return sameRound.find((s) => s.session === 'R') ?? sameRound[0]
 }
 
 function SessionHeader({ meta, laps }: { meta: SessionMeta; laps: Lap[] }) {

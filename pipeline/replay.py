@@ -11,7 +11,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from common import to_float
+from common import delta_encode, to_float
 
 log = logging.getLogger(__name__)
 
@@ -69,10 +69,30 @@ def resample_positions(
     return out_x, out_y
 
 
+REFERENCE_LAP_ATTEMPTS = 25
+
+
+def reference_lap_telemetry(session):
+    """Volta mais rápida que tenha telemetria completa (X, Y e distância).
+
+    Às vezes a volta mais rápida vem sem dados de posição (ex.: Mônaco 2026);
+    nesse caso tenta as próximas, em ordem de tempo.
+    """
+    laps = session.laps.dropna(subset=["LapTime"]).sort_values("LapTime")
+    for _, lap in laps.head(REFERENCE_LAP_ATTEMPTS).iterrows():
+        try:
+            tel = lap.get_telemetry()
+        except Exception as exc:
+            log.debug("Volta %s/%s sem telemetria: %s", lap["Driver"], lap["LapNumber"], exc)
+            continue
+        if len(tel) > 50 and tel[["X", "Y", "Distance"]].notna().all(axis=None):
+            return lap, tel
+    raise RuntimeError("Nenhuma volta com telemetria de posição para desenhar o traçado")
+
+
 def build_track(session) -> dict:
-    """Traçado a partir da volta mais rápida + curvas e rotação oficiais do circuito."""
-    fastest = session.laps.pick_fastest()
-    tel = fastest.get_telemetry()
+    """Traçado a partir da volta mais rápida (com dados) + curvas e rotação oficiais do circuito."""
+    fastest, tel = reference_lap_telemetry(session)
     outline = resample_outline(
         tel["Distance"].to_numpy(dtype=float),
         tel["X"].to_numpy(dtype=float) / 10,
@@ -130,7 +150,14 @@ def build_positions(session, start: float, end: float, hz: int = REPLAY_HZ) -> d
             pos["Y"].to_numpy(dtype=float) / 10,
             start, end, hz,
         )
-        out[abbr] = {"driver": abbr, "start": start, "hz": hz, "x": xs, "y": ys}
+        out[abbr] = {
+            "driver": abbr,
+            "start": start,
+            "hz": hz,
+            "encoding": "delta",
+            "x": delta_encode(xs),
+            "y": delta_encode(ys),
+        }
     return out
 
 

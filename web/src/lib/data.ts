@@ -42,10 +42,46 @@ export const loadResults = (path: string) => getJson<DriverResult[]>(`${path}/re
 export const loadLaps = (path: string) => getJson<Lap[]>(`${path}/laps.json`)
 export const loadTrack = (path: string) => getJson<Track>(`${path}/track.json`)
 export const loadTrackStatus = (path: string) => getJson<TrackStatusChange[]>(`${path}/track_status.json`)
-export const loadTelemetry = (path: string, driver: string) =>
-  getJsonGz<DriverTelemetry>(`${path}/telemetry/${driver}.json.gz`)
-export const loadPositions = (path: string, driver: string) =>
-  getJsonGz<DriverPositions>(`${path}/positions/${driver}.json.gz`)
+/** Inverso do delta_encode do pipeline: depois de um null (ou no início) o valor é absoluto. */
+export function deltaDecode(values: (number | null)[]): (number | null)[] {
+  const out: (number | null)[] = new Array(values.length)
+  let prev: number | null = null
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i]
+    if (v == null) {
+      out[i] = null
+      prev = null
+    } else {
+      prev = prev == null ? v : prev + v
+      out[i] = prev
+    }
+  }
+  return out
+}
+
+type Encoded<T> = T & { encoding?: string }
+
+export async function loadTelemetry(path: string, driver: string): Promise<DriverTelemetry> {
+  const raw = await getJsonGz<Encoded<DriverTelemetry>>(`${path}/telemetry/${driver}.json.gz`)
+  if (raw.encoding !== 'delta') return raw
+  const num = (v: (number | null)[]) => deltaDecode(v) as number[]
+  return {
+    driver: raw.driver,
+    laps: raw.laps.map((l) => ({
+      ...l,
+      d: num(l.d),
+      t: num(l.t).map((c) => c / 100), // centésimos -> segundos
+      speed: num(l.speed),
+      throttle: num(l.throttle),
+    })),
+  }
+}
+
+export async function loadPositions(path: string, driver: string): Promise<DriverPositions> {
+  const raw = await getJsonGz<Encoded<DriverPositions>>(`${path}/positions/${driver}.json.gz`)
+  if (raw.encoding !== 'delta') return raw
+  return { ...raw, x: deltaDecode(raw.x), y: deltaDecode(raw.y) }
+}
 
 /** 83.456 -> "1:23.456" */
 export function formatLapTime(seconds: number | null): string {

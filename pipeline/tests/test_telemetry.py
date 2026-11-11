@@ -15,10 +15,11 @@ def test_lap_channels_converts_units_and_flags():
     })
     out = lap_channels(car)
     assert out == {
-        "d": [0.0, 25.6, 51.0],
-        "t": [0.0, 0.24, 0.48],
-        "speed": [300, 302, 280],
-        "throttle": [100, 100, 0],
+        # metros e centésimos inteiros, codificados em diferenças
+        "d": [0, 26, 25],
+        "t": [0, 24, 24],
+        "speed": [300, 2, -22],
+        "throttle": [100, 0, -100],
         "brake": [0, 0, 1],
         "gear": [8, 8, 7],
         "drs": [1, 0, 0],

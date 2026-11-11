@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { LapTelemetry } from '../types/data'
-import { compareLaps, interpLinear, interpStep, similarColors, textOn } from './telemetry'
+import type { Lap, LapTelemetry } from '../types/data'
+import { compareLaps, fastestLap, interpLinear, interpStep, similarColors, textOn } from './telemetry'
 
 describe('interpolação', () => {
   it('linear entre amostras e valor da ponta fora do intervalo', () => {
@@ -33,5 +33,15 @@ describe('cores', () => {
   it('escolhe texto escuro em fundo claro', () => {
     expect(textOn('#f0f0ec')).toBe('#111')
     expect(textOn('#e10600')).toBe('#fff')
+  })
+})
+
+describe('fastestLap', () => {
+  it('ignora voltas anuladas', () => {
+    const l = (driver: string, lap: number, lapTime: number, deleted: boolean | null) =>
+      ({ driver, lap, lapTime, deleted }) as Lap
+    const laps = [l('AAA', 1, 80, true), l('AAA', 2, 81, false), l('BBB', 1, 80.5, null)]
+    expect(fastestLap(laps)?.driver).toBe('BBB')
+    expect(fastestLap(laps, 'AAA')?.lap).toBe(2)
   })
 })
