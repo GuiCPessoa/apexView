@@ -149,6 +149,15 @@ def build_constructor_standings(rows: list[dict], colors: dict[str, str]) -> lis
     return out
 
 
+def podium_entry(row: dict, colors: dict[str, str]) -> dict:
+    team = row.get("Constructor", {})
+    return {
+        "driver": driver_code(row["Driver"]),
+        "team": team.get("name"),
+        "teamColor": match_team_color(colors, team.get("constructorId", ""), team.get("name", "")),
+    }
+
+
 FORM_RACES = 5  # forma: últimas 5 corridas
 PAGE_SIZE = 100  # máximo de linhas por consulta no Jolpica
 
@@ -184,8 +193,8 @@ def build_season_stats(
     poles: dict[int, list[dict]],
     colors: dict[str, str],
 ) -> dict:
-    """Pódios, poles e forma por piloto; pontos de cada piloto por equipe; vencedor de cada rodada;
-    pontos acumulados rodada a rodada.
+    """Pódios, poles e forma por piloto; pontos de cada piloto por equipe; vencedor, pódio e pole
+    de cada rodada; pontos acumulados rodada a rodada.
 
     `races`, `sprints` e `poles`: rodada -> linhas de Results / SprintResults / QualifyingResults.
     """
@@ -194,6 +203,7 @@ def build_season_stats(
     pole_count: dict[str, int] = defaultdict(int)
     form: dict[str, list[int | None]] = defaultdict(list)
     winners = []
+    results: dict[int, dict] = {}
     total: dict[str, float] = defaultdict(float)
     by_team: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     history: dict[str, list[float]] = {}
@@ -209,6 +219,9 @@ def build_season_stats(
             form[code].append(pos)
             if pos is not None and pos <= 3:
                 podiums[code] += 1
+                results.setdefault(rnd, {"round": rnd, "podium": [None] * 3, "pole": None})["podium"][pos - 1] = (
+                    podium_entry(r, colors)
+                )
             if pos == 1:
                 team = r.get("Constructor", {})
                 winners.append({
@@ -221,10 +234,11 @@ def build_season_stats(
             history.setdefault(code, [0.0] * i)
         for code, points in history.items():
             points.append(round(total[code], 1))
-    for rows in poles.values():
+    for rnd, rows in poles.items():
         for r in rows:
             if to_int(r.get("position")) == 1:
                 pole_count[driver_code(r["Driver"])] += 1
+                results.setdefault(rnd, {"round": rnd, "podium": [None] * 3, "pole": None})["pole"] = podium_entry(r, colors)
 
     drivers = set(form) | set(pole_count) | set(history)
     return {
@@ -237,6 +251,9 @@ def build_season_stats(
             for team, drv in by_team.items()
         },
         "winners": winners,
+        "rounds": [
+            {**v, "podium": [p for p in v["podium"] if p]} for _, v in sorted(results.items())
+        ],
         "history": {"rounds": rounds, "points": history},
     }
 
@@ -283,6 +300,7 @@ def export_standings(year: int, data_dir: Path = DATA_DIR) -> Path:
     for c in standings["constructors"]:
         c["drivers"] = stats["teams"].get(c["constructorId"], [])
     standings["winners"] = stats["winners"]
+    standings["rounds"] = stats["rounds"]
     standings["history"] = stats["history"]
     write_json(out / "standings.json", standings)
     update_index(data_dir)

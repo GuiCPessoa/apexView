@@ -102,6 +102,16 @@ def test_season_stats_soma_sprints_e_conta_podios_poles_e_forma():
     assert stats["history"]["points"]["NEW"] == [0.0, 7.0]  # estreou na rodada 2
     assert stats["drivers"]["ANT"] == {"podiums": 1, "poles": 2, "form": [1, None]}
     assert stats["drivers"]["RUS"]["podiums"] == 2
+    assert stats["rounds"][0] == {
+        "round": 1,
+        "podium": [
+            {"driver": "ANT", "team": "Mercedes", "teamColor": "#27f4d2"},
+            {"driver": "VER", "team": "Red Bull", "teamColor": "#3671c6"},
+            {"driver": "RUS", "team": "Mercedes", "teamColor": "#27f4d2"},
+        ],
+        "pole": {"driver": "ANT", "team": "Mercedes", "teamColor": "#27f4d2"},
+    }
+    assert [p["driver"] for p in stats["rounds"][1]["podium"]] == ["VER", "RUS"]  # ANT abandonou
     assert stats["teams"]["mercedes"] == [
         {"driver": "ANT", "points": 33.0}, {"driver": "RUS", "points": 33.0}, {"driver": "NEW", "points": 7.0},
     ]

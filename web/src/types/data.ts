@@ -62,6 +62,8 @@ export interface Standings {
   constructors: ConstructorStanding[]
   /** Vencedor de cada corrida já disputada. */
   winners?: RoundWinner[]
+  /** Pódio e pole de cada rodada já disputada. */
+  rounds?: RoundResult[]
   /** Pontos acumulados (corridas + sprints) após cada rodada, por piloto. */
   history?: { rounds: number[]; points: Record<string, number[]> }
 }
@@ -88,6 +90,26 @@ export interface RoundWinner {
   driver: string
   team: string | null
   teamColor: string | null
+}
+
+export interface RoundDriver {
+  driver: string
+  team: string | null
+  teamColor: string | null
+}
+
+export interface RoundResult {
+  round: number
+  podium: RoundDriver[] // 1º, 2º e 3º classificados (pode ter menos)
+  pole: RoundDriver | null
+}
+
+/** data/{ano}/outlines.json: traçado simplificado de cada rodada (para o calendário). */
+export interface Outlines {
+  schemaVersion: number
+  year: number
+  size: number // os pontos vão de 0 a size, já girados como o mapa
+  outlines: Record<string, [number, number][]> // chave: número da rodada
 }
 
 export interface ConstructorStanding {

@@ -19,6 +19,7 @@ data/
 └── {ano}/
     ├── calendar.json               # calendário da temporada (Jolpica)
     ├── standings.json              # classificação de pilotos e construtores (Jolpica)
+    ├── outlines.json               # traçado simplificado de cada rodada (para o calendário)
     └── {rodada}-{local}/{sessao}/  # dados de uma sessão (FastF1)
         ├── meta.json
         ├── results.json
@@ -69,15 +70,27 @@ Cada item de `rounds`:
 | `sprint` | bool | Fim de semana com sprint |
 | `sessions` | array | `{code, start}` em ordem cronológica. `code` usa os mesmos códigos das pastas de sessão. `start` é ISO 8601 em UTC (`2026-03-15T07:00:00Z`), só a data (`2026-03-15`) quando o horário não é conhecido, ou `null` |
 
+## `{ano}/outlines.json`
+
+```json
+{"schemaVersion": 1, "year": 2026, "size": 1000, "outlines": {"1": [[x, y], ...], "2": [...]}}
+```
+
+- Um traçado por rodada, já girado como o mapa do site e centrado num quadrado de 0 a `size`, com ~120 pontos (o arquivo da temporada tem ~27 KB, uma consulta só para o calendário inteiro).
+- Recriado a cada export (junto do `index.json`) a partir dos `track.json`: usa o da corrida e, se faltar ou for inválido (traçado com menos de 500 m de extensão, como o de Mônaco 2026), o da classificação ou de outra sessão.
+- Rodadas ainda sem sessão exportada não aparecem.
+
 ## `{ano}/standings.json`
 
 ```json
 {"schemaVersion": 1, "year": 2026, "afterRound": 20, "generatedAt": "...", "drivers": [ ... ], "constructors": [ ... ],
  "winners": [{"round": 20, "driver": "NOR", "team": "McLaren", "teamColor": "#ff8000"}, ...],
+ "rounds": [{"round": 20, "podium": [{"driver": "NOR", "team": "McLaren", "teamColor": "#ff8000"}, ...], "pole": {"driver": "ANT", ...}}, ...],
  "history": {"rounds": [1, 2, ..., 20], "points": {"ANT": [18.0, 47.0, ...], ...}}}
 ```
 
 - `winners`: vencedor de cada corrida já disputada.
+- `rounds`: pódio (até 3 classificados) e pole de cada rodada já disputada, usados no calendário.
 - `history`: pontos acumulados de cada piloto após cada rodada, corridas **e sprints** somadas (o último valor bate com `points`). Pilotos que estrearam no meio do ano têm 0 nas rodadas anteriores.
 - `winners`, `history` e os campos de estatística abaixo são calculados a partir dos resultados de corridas, sprints e classificações do Jolpica (poucas consultas paginadas). Arquivos exportados antes podem não tê-los; o site funciona sem eles.
 

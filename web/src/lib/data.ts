@@ -5,6 +5,7 @@ import type {
   DriverResult,
   DriverTelemetry,
   Lap,
+  Outlines,
   SessionMeta,
   Standings,
   Track,
@@ -40,6 +41,8 @@ export const loadStandings = (year: number) => getJson<Standings>(`${year}/stand
 export const loadMeta = (path: string) => getJson<SessionMeta>(`${path}/meta.json`)
 export const loadResults = (path: string) => getJson<DriverResult[]>(`${path}/results.json`)
 export const loadLaps = (path: string) => getJson<Lap[]>(`${path}/laps.json`)
+/** Traçados simplificados da temporada; null se ainda não exportados. */
+export const loadOutlines = (year: number) => getJson<Outlines>(`${year}/outlines.json`).catch(() => null)
 export const loadTrack = (path: string) => getJson<Track>(`${path}/track.json`)
 export const loadTrackStatus = (path: string) => getJson<TrackStatusChange[]>(`${path}/track_status.json`)
 /** Inverso do delta_encode do pipeline: depois de um null (ou no início) o valor é absoluto. */

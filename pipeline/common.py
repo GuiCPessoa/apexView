@@ -129,4 +129,59 @@ def update_index(data_dir: Path = DATA_DIR) -> dict:
 
     index = {"seasons": seasons, "sessions": sessions}
     write_json(data_dir / "index.json", index)
+    update_outlines(data_dir)
     return index
+
+
+OUTLINE_POINTS = 120  # pontos do traçado simplificado (desenho pequeno no calendário)
+OUTLINE_SIZE = 1000  # o traçado é normalizado num quadrado de 0 a 1000
+OUTLINE_MIN_SIZE_M = 500  # traçado menor que isso é dado quebrado (posições zeradas)
+OUTLINE_SESSION_ORDER = ["R", "Q", "S", "SQ", "FP3", "FP2", "FP1"]
+
+
+def simplify_outline(track: dict, points: int = OUTLINE_POINTS) -> list[list[int]] | None:
+    """Traçado girado pela rotação oficial (como o mapa do site), centrado num quadrado de
+    0 a OUTLINE_SIZE e reduzido a ~`points` pontos. None se o traçado for inválido."""
+    outline = track.get("outline") or []
+    if len(outline) < 3:
+        return None
+    xs = [p[0] for p in outline]
+    ys = [p[1] for p in outline]
+    if max(max(xs) - min(xs), max(ys) - min(ys)) < OUTLINE_MIN_SIZE_M:
+        return None
+    a = math.radians(track.get("rotation") or 0.0)
+    cos, sin = math.cos(a), math.sin(a)
+    step = max(1, len(outline) // points)
+    pts = [(x * cos - y * sin, -(x * sin + y * cos)) for x, y in outline[::step]]
+    px = [p[0] for p in pts]
+    py = [p[1] for p in pts]
+    size = max(max(px) - min(px), max(py) - min(py))
+    ox = (size - (max(px) - min(px))) / 2 - min(px)
+    oy = (size - (max(py) - min(py))) / 2 - min(py)
+    return [[round((x + ox) / size * OUTLINE_SIZE), round((y + oy) / size * OUTLINE_SIZE)] for x, y in pts]
+
+
+def update_outlines(data_dir: Path = DATA_DIR) -> None:
+    """Recria data/{ano}/outlines.json: um traçado simplificado por rodada, a partir dos
+    track.json exportados (prefere o da corrida; pula traçados inválidos)."""
+    by_round: dict[int, dict[int, dict[str, Path]]] = {}
+    for meta_path in data_dir.glob("*/*/*/meta.json"):
+        meta = json.loads(meta_path.read_text())
+        track = meta_path.with_name("track.json")
+        if track.exists():
+            by_round.setdefault(meta["year"], {}).setdefault(meta["round"], {})[meta["session"]] = track
+    for year, rounds in by_round.items():
+        outlines = {}
+        for rnd, tracks in sorted(rounds.items()):
+            order = sorted(tracks, key=lambda c: OUTLINE_SESSION_ORDER.index(c) if c in OUTLINE_SESSION_ORDER else 99)
+            for code in order:
+                simple = simplify_outline(json.loads(tracks[code].read_text()))
+                if simple:
+                    outlines[str(rnd)] = simple
+                    break
+        write_json(data_dir / str(year) / "outlines.json", {
+            "schemaVersion": SCHEMA_VERSION,
+            "year": year,
+            "size": OUTLINE_SIZE,
+            "outlines": outlines,
+        })

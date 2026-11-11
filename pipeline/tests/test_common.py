@@ -3,7 +3,9 @@ from datetime import timedelta
 
 import pandas as pd
 
-from common import delta_encode, slugify, to_int, to_seconds, to_str, update_index
+import json
+
+from common import delta_encode, simplify_outline, slugify, to_int, to_seconds, to_str, update_index, update_outlines
 
 
 def test_slugify_removes_accents_and_spaces():
@@ -54,3 +56,38 @@ def test_delta_encode_restarts_after_gaps():
     assert delta_encode([]) == []
     assert delta_encode([None, 5]) == [None, 5]
 
+
+
+def square(size):
+    return [[0, 0], [size, 0], [size, size], [0, size]] * 10
+
+
+def test_simplify_outline_normaliza_e_descarta_invalidos():
+    out = simplify_outline({"rotation": 0, "outline": square(2000)}, points=4)
+    xs = [p[0] for p in out]
+    ys = [p[1] for p in out]
+    assert min(xs) == 0 and max(xs) == 1000 and min(ys) == 0 and max(ys) == 1000
+    assert len(out) <= 10
+    assert simplify_outline({"rotation": 0, "outline": [[-0.4, -0.4]] * 300}) is None
+    assert simplify_outline({"rotation": 0, "outline": []}) is None
+
+
+def write_session(root, year, rnd, code, track):
+    folder = root / str(year) / f"{rnd:02d}-gp" / code
+    folder.mkdir(parents=True)
+    (folder / "meta.json").write_text(json.dumps({"year": year, "round": rnd, "session": code}))
+    (folder / "track.json").write_text(json.dumps(track))
+
+
+def test_update_outlines_prefere_corrida_e_pula_traçado_quebrado(tmp_path):
+    good = {"rotation": 0, "outline": square(3000)}
+    broken = {"rotation": 0, "outline": [[0, 0]] * 50}
+    write_session(tmp_path, 2026, 1, "Q", {"rotation": 90, "outline": square(3000)})
+    write_session(tmp_path, 2026, 1, "R", good)
+    write_session(tmp_path, 2026, 6, "R", broken)
+    write_session(tmp_path, 2026, 6, "Q", good)
+    update_outlines(tmp_path)
+    data = json.loads((tmp_path / "2026" / "outlines.json").read_text())
+    assert set(data["outlines"]) == {"1", "6"}
+    assert data["outlines"]["1"] == simplify_outline(good)
+    assert data["outlines"]["6"] == simplify_outline(good)
