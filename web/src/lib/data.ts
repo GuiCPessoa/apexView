@@ -16,10 +16,40 @@ import type {
 
 const BASE = `${import.meta.env.BASE_URL}data`
 
-async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}/${path}`)
-  if (!res.ok) throw new Error(`Falha ao carregar ${path} (HTTP ${res.status})`)
-  return res.json() as Promise<T>
+// ---------- Cache em memória ----------
+// Os arquivos de data/ são estáticos. Guardar o que já foi carregado evita pedir o mesmo arquivo
+// duas vezes (o track.json é usado pelo mapa e pela telemetria) e torna instantâneo voltar a uma
+// tela já visitada. Quem recebe os dados não pode alterá-los: o mesmo objeto é reaproveitado.
+const CACHE_TTL_MS = 10 * 60 * 1000 // depois disso busca de novo (o site pode ter recebido dados novos)
+const CACHE_MAX = 100 // ~4 corridas inteiras com replay; os mais antigos saem primeiro
+const cache = new Map<string, { at: number; promise: Promise<unknown> }>()
+
+/** Devolve o carregamento em andamento ou já concluído de `key`; falhas não ficam guardadas. */
+export function cached<T>(key: string, load: () => Promise<T>, now: number = Date.now()): Promise<T> {
+  const hit = cache.get(key)
+  if (hit && now - hit.at < CACHE_TTL_MS) {
+    cache.delete(key) // volta para o fim da fila (usado por último)
+    cache.set(key, hit)
+    return hit.promise as Promise<T>
+  }
+  const promise = load()
+  const entry = { at: now, promise }
+  cache.delete(key)
+  cache.set(key, entry)
+  promise.catch(() => cache.get(key) === entry && cache.delete(key))
+  while (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value!)
+  return promise
+}
+
+/** Só para testes. */
+export const clearCache = () => cache.clear()
+
+function getJson<T>(path: string): Promise<T> {
+  return cached(path, async () => {
+    const res = await fetch(`${BASE}/${path}`)
+    if (!res.ok) throw new Error(`Falha ao carregar ${path} (HTTP ${res.status})`)
+    return res.json() as Promise<T>
+  })
 }
 
 /**
@@ -70,26 +100,33 @@ export function deltaDecode(values: (number | null)[]): (number | null)[] {
 
 type Encoded<T> = T & { encoding?: string }
 
-export async function loadTelemetry(path: string, driver: string): Promise<DriverTelemetry> {
-  const raw = await getJsonGz<Encoded<DriverTelemetry>>(`${path}/telemetry/${driver}.json.gz`)
-  if (raw.encoding !== 'delta') return raw
-  const num = (v: (number | null)[]) => deltaDecode(v) as number[]
-  return {
-    driver: raw.driver,
-    laps: raw.laps.map((l) => ({
-      ...l,
-      d: num(l.d),
-      t: num(l.t).map((c) => c / 100), // centésimos -> segundos
-      speed: num(l.speed),
-      throttle: num(l.throttle),
-    })),
-  }
+export function loadTelemetry(path: string, driver: string): Promise<DriverTelemetry> {
+  const file = `${path}/telemetry/${driver}.json.gz`
+  // o cache guarda o resultado já decodificado
+  return cached(file, async () => {
+    const raw = await getJsonGz<Encoded<DriverTelemetry>>(file)
+    if (raw.encoding !== 'delta') return raw
+    const num = (v: (number | null)[]) => deltaDecode(v) as number[]
+    return {
+      driver: raw.driver,
+      laps: raw.laps.map((l) => ({
+        ...l,
+        d: num(l.d),
+        t: num(l.t).map((c) => c / 100), // centésimos -> segundos
+        speed: num(l.speed),
+        throttle: num(l.throttle),
+      })),
+    }
+  })
 }
 
-export async function loadPositions(path: string, driver: string): Promise<DriverPositions> {
-  const raw = await getJsonGz<Encoded<DriverPositions>>(`${path}/positions/${driver}.json.gz`)
-  if (raw.encoding !== 'delta') return raw
-  return { ...raw, x: deltaDecode(raw.x), y: deltaDecode(raw.y) }
+export function loadPositions(path: string, driver: string): Promise<DriverPositions> {
+  const file = `${path}/positions/${driver}.json.gz`
+  return cached(file, async () => {
+    const raw = await getJsonGz<Encoded<DriverPositions>>(file)
+    if (raw.encoding !== 'delta') return raw
+    return { ...raw, x: deltaDecode(raw.x), y: deltaDecode(raw.y) }
+  })
 }
 
 /** 83.456 -> "1:23.456" */

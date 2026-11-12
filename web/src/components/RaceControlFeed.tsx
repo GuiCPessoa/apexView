@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { RC_KINDS, DEFAULT_RC_KINDS, countByKind, flagClass, visibleMessages, type RcKind } from '../lib/raceControl'
 import type { RaceControlMessage } from '../types/data'
 
 interface Props {
   messages: RaceControlMessage[]
-  /** Só mostra mensagens até este instante (replay). null = todas. */
-  now: number | null
+  /** Só as primeiras `count` mensagens (as que já saíram no replay, de `countUntil`). null = todas. */
+  count: number | null
   /** Rótulo de horário de cada mensagem (relógio da prova no replay, hora local no ao vivo). */
   formatTime: (m: RaceControlMessage) => string
   /** Clique numa mensagem (o replay pula para o instante dela). */
@@ -15,11 +15,14 @@ interface Props {
   teamColors: ReadonlyMap<string, string | null>
 }
 
-/** Feed completo da direção de prova, com filtros por tipo e o piloto citado clicável. */
-export default function RaceControlFeed({ messages, now, formatTime, onPick, focus, onToggle, teamColors }: Props) {
+/**
+ * Feed completo da direção de prova, com filtros por tipo e o piloto citado clicável.
+ * Memoizado: com props estáveis, só redesenha quando sai uma mensagem nova (não a cada quadro do replay).
+ */
+export default memo(function RaceControlFeed({ messages, count, formatTime, onPick, focus, onToggle, teamColors }: Props) {
   const [kinds, setKinds] = useState<ReadonlySet<RcKind>>(DEFAULT_RC_KINDS)
-  const counts = useMemo(() => countByKind(messages, now), [messages, now])
-  const shown = useMemo(() => visibleMessages(messages, now, kinds), [messages, now, kinds])
+  const counts = useMemo(() => countByKind(messages, count), [messages, count])
+  const shown = useMemo(() => visibleMessages(messages, count, kinds), [messages, count, kinds])
 
   const toggle = (kind: RcKind) =>
     setKinds((cur) => {
@@ -52,7 +55,7 @@ export default function RaceControlFeed({ messages, now, formatTime, onPick, foc
           return (
             <li
               key={`${m.time}-${m.message}`}
-              className={`${i === 0 && now != null ? 'latest' : ''} ${about ? 'focused' : ''} ${onPick ? 'pickable' : ''}`}
+              className={`${i === 0 && count != null ? 'latest' : ''} ${about ? 'focused' : ''} ${onPick ? 'pickable' : ''}`}
               onClick={onPick ? () => onPick(m) : undefined}
               title={onPick ? 'Ir para este momento do replay' : undefined}
             >
@@ -82,4 +85,4 @@ export default function RaceControlFeed({ messages, now, formatTime, onPick, foc
       </ol>
     </>
   )
-}
+})

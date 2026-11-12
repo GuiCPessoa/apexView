@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RaceControlMessage } from '../types/data'
-import { DEFAULT_RC_KINDS, countByKind, flagClass, rcKind, visibleMessages } from './raceControl'
+import { DEFAULT_RC_KINDS, countByKind, countUntil, flagClass, rcKind, visibleMessages } from './raceControl'
 
 const msg = (time: number, message: string, extra: Partial<RaceControlMessage> = {}): RaceControlMessage => ({
   time,
@@ -36,20 +36,30 @@ describe('rcKind', () => {
   })
 })
 
+describe('countUntil', () => {
+  it('conta as mensagens que já saíram até o instante', () => {
+    expect(countUntil(FEED, 5)).toBe(0)
+    expect(countUntil(FEED, 10)).toBe(1)
+    expect(countUntil(FEED, 45)).toBe(4)
+    expect(countUntil(FEED, 1000)).toBe(FEED.length)
+    expect(countUntil([], 10)).toBe(0)
+  })
+})
+
 describe('visibleMessages', () => {
   it('mostra até o instante do replay, da mais recente para a mais antiga, sem bandeiras azuis', () => {
-    const shown = visibleMessages(FEED, 45, DEFAULT_RC_KINDS)
+    const shown = visibleMessages(FEED, countUntil(FEED, 45), DEFAULT_RC_KINDS)
     expect(shown.map((m) => m.time)).toEqual([40, 30, 10])
   })
 
-  it('sem instante mostra todas as mensagens dos tipos escolhidos', () => {
+  it('sem limite mostra todas as mensagens dos tipos escolhidos', () => {
     expect(visibleMessages(FEED, null, new Set(['blue', 'sc'])).map((m) => m.time)).toEqual([50, 20])
   })
 })
 
 describe('countByKind', () => {
   it('conta só até o instante', () => {
-    const counts = countByKind(FEED, 30)
+    const counts = countByKind(FEED, countUntil(FEED, 30))
     expect(counts.flag).toBe(1)
     expect(counts.blue).toBe(1)
     expect(counts.stewards).toBe(1)

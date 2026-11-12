@@ -35,13 +35,13 @@ export default function TelemetryPanel({ path, meta, results, laps, focus, onFoc
   const [driverA, pairB] = telemetryPair(focus, defaults, available)
   // "só A": telemetria de um piloto, sem comparação. Pôr um segundo piloto em foco volta a comparar.
   const [solo, setSolo] = useState(false)
-  useEffect(() => {
-    if (focus.length >= 2) setSolo(false)
-  }, [focus])
+  if (solo && focus.length >= 2) setSolo(false) // ajuste durante o render: sem efeito nem render extra em cascata
   const driverB = solo ? null : pairB
   // volta escolhida por piloto; sem escolha, a mais rápida dele
   const [lapChoice, setLapChoice] = useState<Record<string, number>>({})
-  const lapOf = (d: string | null) => (d ? (lapChoice[d] ?? fastestLap(laps, d)?.lap ?? null) : null)
+  // (quem abandonou cedo pode não ter nenhuma volta cronometrada: usa a primeira volta que tiver)
+  const lapOf = (d: string | null) =>
+    d ? (lapChoice[d] ?? fastestLap(laps, d)?.lap ?? laps.find((l) => l.driver === d && l.lap != null)?.lap ?? null) : null
   const lapNumA = lapOf(driverA)
   const lapNumB = lapOf(driverB)
 
@@ -71,6 +71,12 @@ export default function TelemetryPanel({ path, meta, results, laps, focus, onFoc
     if (!driverB) return compareLaps(lapA, null)
     return lapB ? compareLaps(lapA, lapB) : null
   }, [lapA, lapB, driverB])
+
+  // telemetria do piloto já chegou, mas não traz a volta escolhida
+  const missing = [
+    driverA && cache[driverA] && !lapA ? driverA : null,
+    driverB && cache[driverB] && !lapB ? driverB : null,
+  ].filter((d): d is string => d != null)
 
   const resultBy = useMemo(() => new Map(results.map((r) => [r.driver, r])), [results])
   const colorA = resultBy.get(driverA ?? '')?.teamColor ?? '#e10600'
@@ -147,7 +153,11 @@ export default function TelemetryPanel({ path, meta, results, laps, focus, onFoc
         />
       </div>
 
-      {!comparison && !error && <p className="muted loading">Carregando telemetria…</p>}
+      {!comparison && !error && (missing.length > 0 ? (
+        <p className="muted">Sem telemetria para a volta escolhida de {missing.join(' e ')}.</p>
+      ) : (
+        <p className="muted loading">Carregando telemetria…</p>
+      ))}
 
       {comparison && lapA && (
         <>
@@ -290,9 +300,10 @@ function LapPicker({
   const drivers = [...results]
     .filter((r) => available.includes(r.driver))
     .sort((a, b) => (a.position ?? 99) - (b.position ?? 99))
-  const driverLaps = laps
-    .filter((l) => l.driver === driver && l.lapTime != null && l.lap != null)
-    .sort((a, b) => a.lap! - b.lap!)
+  const mine = laps.filter((l) => l.driver === driver && l.lap != null)
+  const timed = mine.filter((l) => l.lapTime != null)
+  // sem nenhuma volta cronometrada (abandono na largada), lista as que existirem
+  const driverLaps = (timed.length ? timed : mine).sort((a, b) => a.lap! - b.lap!)
   const best = fastestLap(driverLaps)
 
   return (
