@@ -1,6 +1,8 @@
 // Snapshot do modo ao vivo, enviado pelo backend local (live/server.py) por WebSocket.
 // Formato documentado em docs/data-format.md ("Modo ao vivo").
 
+import type { RaceControlMessage, WeatherSample } from './data'
+
 export type LiveTrackStatus = 'green' | 'yellow' | 'sc' | 'red' | 'vsc' | 'vsc_ending' | 'unknown'
 
 export interface LiveTimed {
@@ -39,14 +41,6 @@ export interface LiveDriver {
   throttle: number | null // %
   brake: number | null // 0 ou 100
   drs: boolean
-}
-
-export interface LiveRaceControl {
-  utc: string | null
-  lap: number | null
-  category: string | null
-  flag: string | null
-  message: string | null
 }
 
 /** Sessão do calendário (modo automático). */
@@ -98,15 +92,12 @@ export interface LiveSnapshot {
   lap: { current: number | null; total: number | null }
   clock: { remaining: number | null; running: boolean } | null
   trackStatus: LiveTrackStatus | null
-  weather: {
-    airTemp: number | null
-    trackTemp: number | null
-    humidity: number | null
-    rainfall: boolean
-    windSpeed: number | null
-  } | null
+  weather: Omit<WeatherSample, 'time'> | null
+  /** Amostras de clima da sessão (time = epoch UTC). Ausente = igual ao último recebido. */
+  weatherHistory?: WeatherSample[]
   drivers: LiveDriver[]
-  raceControl: LiveRaceControl[]
+  /** Todas as mensagens da direção de prova, em ordem (time = epoch UTC). Ausente = igual ao último recebido. */
+  raceControl?: RaceControlMessage[]
   /** Traçado (metros). Ausente = igual ao último recebido; null = ainda não montado. */
   outline?: [number, number][] | null
   source: LiveSource

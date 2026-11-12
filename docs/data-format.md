@@ -25,12 +25,14 @@ data/
         ├── results.json
         ├── laps.json
         ├── track.json              # traçado da pista
+        ├── weather.json            # clima (~1 amostra por minuto)
+        ├── race_control.json       # mensagens da direção de prova
         ├── telemetry/{DRV}.json.gz # telemetria de cada volta, por piloto
         ├── track_status.json       # bandeiras e safety car (só R e S)
         └── positions/{DRV}.json.gz # posições X/Y para o replay (só R e S)
 ```
 
-**Base de tempo das sessões:** `startTime`, `endTime`, `pitInTime`, `pitOutTime`, `track_status.json` e o replay usam **segundos desde o início da sessão** (o `SessionTime` do FastF1). Isso permite cruzar voltas, bandeiras e posições sem conversão.
+**Base de tempo das sessões:** `startTime`, `endTime`, `pitInTime`, `pitOutTime`, `track_status.json`, `weather.json`, `race_control.json` e o replay usam **segundos desde o início da sessão** (o `SessionTime` do FastF1). Isso permite cruzar voltas, bandeiras e posições sem conversão.
 
 **Coordenadas:** X/Y em **metros**, no sistema do live timing da F1 (eixo Y para cima). Para desenhar na orientação oficial, gire os pontos por `track.json.rotation` graus e inverta o Y para a tela.
 
@@ -221,6 +223,46 @@ Mudanças de estado da pista, em ordem. O estado vale até a próxima mudança.
 | `vsc` | 6 | Safety car virtual |
 | `vsc_ending` | 7 | Fim do safety car virtual |
 
+## `weather.json`
+
+Amostras de clima da sessão inteira (do FastF1, ~1 por minuto), em ordem. Exportado para toda sessão; `[]` quando a fonte não tem clima. Sessões exportadas antes deste arquivo existir não o têm (o site esconde o cartão).
+
+```json
+[{"time": 3000.2, "airTemp": 22.1, "trackTemp": 40.2, "humidity": 56.0, "pressure": 1012.4, "rainfall": false, "windSpeed": 1.8, "windDirection": 205}]
+```
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `time` | float | Segundos de sessão |
+| `airTemp`, `trackTemp` | float \| null | Temperatura do ar e do asfalto (°C). `null` quando o sensor manda 0 exato (falha isolada da fonte) |
+| `humidity` | float \| null | Umidade relativa (%) |
+| `pressure` | float \| null | Pressão do ar (mbar) |
+| `rainfall` | bool | Está chovendo |
+| `windSpeed` | float \| null | Vento (m/s; o site mostra em km/h) |
+| `windDirection` | int \| null | De onde o vento vem, em graus (0 = norte) |
+
+## `race_control.json`
+
+Todas as mensagens da direção de prova, em ordem. Exportado para toda sessão, com as mesmas ressalvas do `weather.json`.
+
+```json
+[{"time": 4181.0, "lap": 12, "category": "Flag", "flag": "BLUE", "scope": "Driver", "sector": null, "driver": "BOT", "status": null, "message": "WAVED BLUE FLAG FOR CAR 77 (BOT) TIMED AT 15:17:33"}]
+```
+
+| Campo | Tipo | Descrição |
+|---|---|---|
+| `time` | float | Segundos de sessão (o horário da mensagem, com precisão de 1 s) |
+| `lap` | int \| null | Volta do líder quando a mensagem saiu |
+| `category` | string \| null | `Flag`, `SafetyCar`, `Drs`, `CarEvent` ou `Other` (penalidades, investigações e voltas anuladas vêm como `Other`) |
+| `flag` | string \| null | `GREEN`, `YELLOW`, `DOUBLE YELLOW`, `RED`, `BLUE`, `CLEAR`, `CHEQUERED`, `BLACK AND WHITE`… |
+| `scope` | string \| null | `Track`, `Sector` ou `Driver` |
+| `sector` | int \| null | Setor de bandeira (marshal sector), quando `scope` é `Sector` |
+| `driver` | string \| null | Sigla do piloto citado: do número do carro ou, se faltar, do texto (`CAR 44 (HAM)`) |
+| `status` | string \| null | Estado do safety car ou do DRS (`DEPLOYED`, `ENDING`, `IN THIS LAP`, `ENABLED`…) |
+| `message` | string | Texto oficial, em inglês |
+
+O site agrupa as mensagens por tipo (`web/src/lib/raceControl.ts`): bandeiras, bandeiras azuis, safety car, comissários, limites de pista, DRS e outras.
+
 ## `positions/{DRV}.json.gz`
 
 Um arquivo por piloto, em JSON comprimido com gzip (o front descomprime com `DecompressionStream`).
@@ -270,12 +312,13 @@ O backend local (`live/server.py`) não grava arquivos em `data/`: ele manda **s
 {"type": "snapshot", "time": 1794163777.465,
  "session": {"meeting": "São Paulo Grand Prix", "circuit": "Interlagos", "name": "Race", "type": "Race", "status": "Started", ...},
  "lap": {"current": 34, "total": 71}, "clock": {"remaining": 3612.0, "running": true},
- "trackStatus": "green", "weather": {"airTemp": 15.6, "trackTemp": 22.2, "humidity": 90.1, "rainfall": false, "windSpeed": 3.0},
+ "trackStatus": "green", "weather": {"airTemp": 15.6, "trackTemp": 22.2, "humidity": 90.1, "pressure": 1015.2, "rainfall": false, "windSpeed": 3.0, "windDirection": 140},
+ "weatherHistory": [{"time": 1794160000.1, "airTemp": 15.9, "trackTemp": 23.0, ...}, ...],
  "drivers": [{"driver": "NOR", "position": 1, "gap": "LAP 34", "interval": null,
    "lastLap": {"time": 73.1, "best": "personal"}, "bestLap": {...}, "sectors": [{...}, null, null],
    "compound": "SOFT", "tyreAge": 12, "inPit": false, "x": -346.8, "y": 120.4,
    "speed": 298, "gear": 7, "rpm": 11200, "throttle": 100, "brake": 0, "drs": false, ...}],
- "raceControl": [{"utc": "2026-11-08T18:43:45", "lap": 71, "category": "Flag", "flag": "YELLOW", "message": "..."}],
+ "raceControl": [{"time": 1794163425.0, "lap": 71, "category": "Flag", "flag": "YELLOW", "scope": "Sector", "sector": 7, "driver": null, "status": null, "message": "..."}],
  "outline": [[x, y], ...],
  "source": {"mode": "replay", "error": null, "auto": true, "canChoose": true,
    "selected": "2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/", "loading": null,
@@ -286,7 +329,9 @@ O backend local (`live/server.py`) não grava arquivos em `data/`: ele manda **s
 - `time` é o horário do feed (epoch UTC, s). As posições `x`, `y` (metros) são interpoladas 2 s atrás desse horário, para ficarem suaves entre as amostras; os canais do carro (`speed`, `gear`, `rpm`, `throttle`, `brake`, `drs`) usam o mesmo instante, para casar com o mapa.
 - `gap` e `interval` são o texto do feed (`"+1.234"`, `"1 L"`, `"LAP 34"`); o front traduz. Na classificação vêm da diferença no segmento atual.
 - `lastLap`, `bestLap` e `sectors` têm `best`: `"overall"` (roxo, melhor da sessão) ou `"personal"` (verde, melhor do piloto).
-- `outline` é o traçado montado com uma volta limpa de algum carro (`null` até existir). Só vai no snapshot quando muda; quando a chave falta, vale o último recebido.
+- `outline` é o traçado montado com uma volta limpa de algum carro (`null` até existir).
+- `raceControl` traz **todas** as mensagens da direção de prova até `time`, em ordem, com os mesmos campos do `race_control.json` (mas `time` em epoch UTC). `weatherHistory` traz as amostras de clima até `time` (mesmos campos do `weather.json`, `time` em epoch UTC); `weather` é a mais recente.
+- `outline`, `raceControl` e `weatherHistory` só vão no snapshot quando mudam; quando a chave falta, vale o último recebido. Quem conecta recebe o snapshot completo.
 - `traces` só vem para quem pediu, com `{"cmd": "traces", "drivers": ["NOR", "VER"]}` (até 2 pilotos): por sigla, `{"current": ..., "previous": ...}` com a volta atual (até o instante mostrado) e a anterior. Cada uma é `{"lap", "d", "speed", "throttle", "brake"}`: listas alinhadas, `d` em metros desde a linha (integrada pela velocidade, como o FastF1), `brake` 1/0. `null` enquanto não houver uma passagem pela linha observada de verdade (a primeira leitura de voltas, ao conectar, não conta).
 - `source.mode`: `"live"` (feed ao vivo), `"replay"` (simulação) ou `"idle"` (sem gravação, esperando a escolha). Na simulação o site pode mandar comandos pelo mesmo WebSocket: `{"cmd": "pause", "value": true}`, `{"cmd": "speed", "value": 16}` (1, 2, 4, 8, 16 ou 32) e `{"cmd": "seek", "value": 3600}` (segundos desde o início da gravação).
 - `source.auto`: o servidor está no modo automático (liga o ao vivo no horário das sessões do `calendar.json`). `nextLive` é a próxima sessão em que isso acontece e `liveSession`, a sessão do calendário durante o ao vivo.

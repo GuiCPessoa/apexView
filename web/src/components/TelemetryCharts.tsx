@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { cssVar } from '../lib/chart'
-import type { Comparison } from '../lib/telemetry'
+import type { Channels, Comparison } from '../lib/telemetry'
 import type { Corner } from '../types/data'
 
 interface Props {
@@ -17,6 +17,7 @@ interface ChartSpec {
   key: string
   label: string
   height: number
+  /** Canais de A e de B (B só quando há comparação). */
   series: (c: Comparison) => (number | null)[][]
   names: string[]
   range?: [number, number]
@@ -25,12 +26,19 @@ interface ChartSpec {
   showCorners?: boolean
 }
 
+/** Canal de A e, se houver comparação, o de B (degraus de B um pouco abaixo para não esconder A). */
+function both(c: Comparison, pick: (x: Channels) => number[], scaleB = 1): number[][] {
+  if (!c.b) return [pick(c.a)]
+  const b = pick(c.b)
+  return [pick(c.a), scaleB === 1 ? b : b.map((v) => v * scaleB)]
+}
+
 const CHARTS: ChartSpec[] = [
   {
     key: 'delta',
     label: 'Diferença (s) · acima de 0 = B atrás',
     height: 110,
-    series: (c) => [c.delta],
+    series: (c) => [c.delta ?? []],
     names: ['Δ'],
     delta: true,
   },
@@ -38,7 +46,7 @@ const CHARTS: ChartSpec[] = [
     key: 'speed',
     label: 'Velocidade (km/h)',
     height: 220,
-    series: (c) => [c.a.speed, c.b.speed],
+    series: (c) => both(c, (x) => x.speed),
     names: ['A', 'B'],
     showCorners: true,
   },
@@ -46,7 +54,7 @@ const CHARTS: ChartSpec[] = [
     key: 'throttle',
     label: 'Acelerador (%)',
     height: 100,
-    series: (c) => [c.a.throttle, c.b.throttle],
+    series: (c) => both(c, (x) => x.throttle),
     names: ['A', 'B'],
     range: [-5, 105],
   },
@@ -54,7 +62,7 @@ const CHARTS: ChartSpec[] = [
     key: 'brake',
     label: 'Freio',
     height: 64,
-    series: (c) => [c.a.brake, c.b.brake.map((v) => v * 0.85)],
+    series: (c) => both(c, (x) => x.brake, 0.85),
     names: ['A', 'B'],
     range: [-0.1, 1.1],
     step: true,
@@ -63,7 +71,7 @@ const CHARTS: ChartSpec[] = [
     key: 'gear',
     label: 'Marcha',
     height: 100,
-    series: (c) => [c.a.gear, c.b.gear],
+    series: (c) => both(c, (x) => x.gear),
     names: ['A', 'B'],
     range: [0, 9],
     step: true,
@@ -72,7 +80,7 @@ const CHARTS: ChartSpec[] = [
     key: 'drs',
     label: 'DRS',
     height: 64,
-    series: (c) => [c.a.drs, c.b.drs.map((v) => v * 0.85)],
+    series: (c) => both(c, (x) => x.drs, 0.85),
     names: ['A', 'B'],
     range: [-0.1, 1.1],
     step: true,
@@ -128,7 +136,10 @@ export default function TelemetryCharts({ comparison, colorA, colorB, corners, o
     const plots: uPlot[] = []
     let syncing = false
 
-    for (const spec of CHARTS) {
+    // sem B não há diferença a mostrar
+    const charts = comparison.b ? CHARTS : CHARTS.filter((s) => !s.delta)
+
+    for (const spec of charts) {
       const wrap = document.createElement('div')
       wrap.className = 'tchart'
       const title = document.createElement('div')
@@ -138,8 +149,8 @@ export default function TelemetryCharts({ comparison, colorA, colorB, corners, o
       container.appendChild(wrap)
 
       const data = [comparison.d, ...spec.series(comparison)] as uPlot.AlignedData
-      const colors = spec.delta ? [colorB] : [colorA, colorB]
-      const isLast = spec === CHARTS[CHARTS.length - 1]
+      const colors = (spec.delta ? [colorB] : [colorA, colorB]).slice(0, data.length - 1)
+      const isLast = spec === charts[charts.length - 1]
 
       const opts: uPlot.Options = {
         width,
@@ -222,7 +233,7 @@ export default function TelemetryCharts({ comparison, colorA, colorB, corners, o
     const container2 = container
     const observer = new ResizeObserver(() => {
       const w = container2.clientWidth
-      for (let i = 0; i < plots.length; i++) plots[i].setSize({ width: w, height: CHARTS[i].height })
+      for (let i = 0; i < plots.length; i++) plots[i].setSize({ width: w, height: charts[i].height })
     })
     observer.observe(container)
     const onLeave = () => hoverRef.current(null)

@@ -1815,6 +1815,97 @@ table.compact .team-bar {
   color: var(--text);
 }
 
+.rc-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.rc-filters .chip {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.rc-filters .chip:not(.on) {
+  opacity: 0.6;
+}
+
+.rc-filters .chip .muted {
+  font-weight: 400;
+}
+
+.rc-card .rc-list {
+  max-height: 380px;
+}
+
+.rc-list li.pickable {
+  cursor: pointer;
+}
+
+.rc-list li.pickable:hover {
+  background: var(--surface-2);
+}
+
+.rc-list li.latest {
+  box-shadow: inset 3px 0 0 var(--accent);
+  padding-left: 8px;
+}
+
+.rc-list li.focused {
+  background: var(--accent-soft);
+}
+
+.rc-driver {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 6px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.rc-driver i {
+  width: 3px;
+  height: 10px;
+  border-radius: 1px;
+}
+
+.rc-driver.on {
+  border-color: var(--accent);
+}
+
+.rc-text {
+  overflow-wrap: anywhere;
+}
+
+.weather-6 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  row-gap: 10px;
+}
+
+.weather.raining {
+  border-bottom-color: #60a5fa;
+}
+
+.weather-legend {
+  margin: 6px 0 0;
+  font-size: 12px;
+}
+
+.weather-legend .rain-swatch {
+  width: 12px;
+  height: 10px;
+  background: rgba(96, 165, 250, 0.35);
+}
+
 pre.code {
   margin: 8px 0 12px;
   padding: 12px 14px;

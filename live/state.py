@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import bisect
 import math
+import re
 from collections import deque
 from dataclasses import dataclass, field
 
@@ -36,7 +37,9 @@ POSITION_LAG_S = 2.0  # posições mostradas um pouco atrás, para interpolar en
 HISTORY_S = 300.0  # histórico por carro: cobre a volta anterior e a atual, mesmo lentas
 MIN_OUTLINE_POINTS = 120
 MAX_OUTLINE_GAP_M = 250.0  # início e fim da volta precisam se encontrar
-RACE_CONTROL_SHOWN = 12
+WEATHER_HISTORY_MAX = 600  # ~10 h de amostras (o feed manda uma por minuto)
+# "CAR 44 (HAM)" nas mensagens que não trazem RacingNumber
+CAR_IN_MESSAGE = re.compile(r"\bCARS? (\d{1,2}) \(([A-Z]{3})\)")
 
 
 def merge(base, patch):
@@ -200,6 +203,7 @@ class LiveState:
         self.cars: dict[str, CarHistory] = {}
         self.last_time: float = 0.0
         self.outline: list[list[float]] | None = None
+        self.weather_history: list[dict] = []
         self._crossings: dict[str, deque[Crossing]] = {}
         self._pitted: set[str] = set()  # passou pelos boxes desde a última passagem pela linha
 
@@ -211,6 +215,8 @@ class LiveState:
             if msg.topic == "TimingData":
                 self._watch_laps(msg)
             self.topics[msg.topic] = merge(self.topics.get(msg.topic), msg.data)
+            if msg.topic == "WeatherData":
+                self._record_weather(msg.time)
         elif msg.topic == "Position":
             for sample in msg.data.get("Position") or []:
                 ts = parse_utc(sample["Timestamp"]) if sample.get("Timestamp") else msg.time
@@ -224,6 +230,16 @@ class LiveState:
                 ts = parse_utc(entry["Utc"]) if entry.get("Utc") else msg.time
                 for num, car in (entry.get("Cars") or {}).items():
                     self.cars.setdefault(num, CarHistory()).add(ts, car.get("Channels") or {})
+
+    def _record_weather(self, t: float) -> None:
+        sample = {"time": round(t, 3), **self._weather()}
+        history = self.weather_history
+        if history and history[-1]["time"] > t:
+            return  # fora de ordem
+        if history and {**history[-1], "time": 0} == {**sample, "time": 0}:
+            return  # repetida
+        history.append(sample)
+        del history[:-WEATHER_HISTORY_MAX]
 
     def _watch_laps(self, msg: Message) -> None:
         """Passagens pela linha (NumberOfLaps muda) alimentam o traçado da pista."""
@@ -290,8 +306,9 @@ class LiveState:
             "clock": self._clock(now),
             "trackStatus": TRACK_STATUS.get(str(status.get("Status")), "unknown") if status else None,
             "weather": self._weather(),
+            "weatherHistory": [w for w in self.weather_history if w["time"] <= now],
             "drivers": self._drivers(now - POSITION_LAG_S),
-            "raceControl": self._race_control(),
+            "raceControl": self._race_control(now),
             "outline": self.outline,
         }
 
@@ -309,24 +326,49 @@ class LiveState:
         w = self.topics.get("WeatherData")
         if not w:
             return None
+        direction = to_float(w.get("WindDirection"))
         return {
-            "airTemp": to_float(w.get("AirTemp")),
-            "trackTemp": to_float(w.get("TrackTemp")),
+            # 0 °C exato é falha do sensor, não medida
+            "airTemp": to_float(w.get("AirTemp")) or None,
+            "trackTemp": to_float(w.get("TrackTemp")) or None,
             "humidity": to_float(w.get("Humidity")),
+            "pressure": to_float(w.get("Pressure")),
             "rainfall": to_float(w.get("Rainfall")) not in (None, 0.0),
             "windSpeed": to_float(w.get("WindSpeed")),
+            "windDirection": None if direction is None else int(direction),
         }
 
-    def _race_control(self) -> list[dict]:
+    def _race_control(self, now: float) -> list[dict]:
+        """Todas as mensagens até `now`, em ordem (o front mostra da mais recente para a mais antiga)."""
         msgs = items((self.topics.get("RaceControlMessages") or {}).get("Messages"))
+        listing = self.topics.get("DriverList") or {}
         out = []
-        for m in reversed(msgs[-RACE_CONTROL_SHOWN:]):
+        for m in msgs:
+            if not isinstance(m, dict):
+                continue
+            try:
+                t = parse_utc(m["Utc"]) if m.get("Utc") else None
+            except ValueError:
+                t = None
+            if t is not None and t > now:
+                continue
+            text = m.get("Message") or ""
+            num = str(m.get("RacingNumber") or "")
+            driver = (listing.get(num) or {}).get("Tla") if num else None
+            if driver is None:
+                match = CAR_IN_MESSAGE.search(text)
+                driver = match.group(2) if match else None
+            sector = to_float(m.get("Sector"))
             out.append({
-                "utc": m.get("Utc"),
+                "time": round(t if t is not None else now, 3),
                 "lap": m.get("Lap"),
                 "category": m.get("Category"),
                 "flag": m.get("Flag"),
-                "message": m.get("Message"),
+                "scope": m.get("Scope"),
+                "sector": None if sector is None else int(sector),
+                "driver": driver,
+                "status": m.get("Status"),
+                "message": text,
             })
         return out
 

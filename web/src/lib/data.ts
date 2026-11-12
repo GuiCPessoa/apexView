@@ -6,10 +6,12 @@ import type {
   DriverTelemetry,
   Lap,
   Outlines,
+  RaceControlMessage,
   SessionMeta,
   Standings,
   Track,
   TrackStatusChange,
+  WeatherSample,
 } from '../types/data'
 
 const BASE = `${import.meta.env.BASE_URL}data`
@@ -45,6 +47,10 @@ export const loadLaps = (path: string) => getJson<Lap[]>(`${path}/laps.json`)
 export const loadOutlines = (year: number) => getJson<Outlines>(`${year}/outlines.json`).catch(() => null)
 export const loadTrack = (path: string) => getJson<Track>(`${path}/track.json`)
 export const loadTrackStatus = (path: string) => getJson<TrackStatusChange[]>(`${path}/track_status.json`)
+/** Clima e mensagens da direção de prova; null em sessões exportadas antes desses arquivos existirem. */
+export const loadWeather = (path: string) => getJson<WeatherSample[]>(`${path}/weather.json`).catch(() => null)
+export const loadRaceControl = (path: string) =>
+  getJson<RaceControlMessage[]>(`${path}/race_control.json`).catch(() => null)
 /** Inverso do delta_encode do pipeline: depois de um null (ou no início) o valor é absoluto. */
 export function deltaDecode(values: (number | null)[]): (number | null)[] {
   const out: (number | null)[] = new Array(values.length)
