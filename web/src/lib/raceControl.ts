@@ -30,25 +30,54 @@ export function rcKind(m: RaceControlMessage): RcKind {
   return 'other'
 }
 
-/** Mensagens a mostrar, da mais recente para a mais antiga. `now` null = todas (sem replay). */
+// A classificação usa várias expressões regulares; cada lista de mensagens é classificada uma vez só.
+const kindsCache = new WeakMap<RaceControlMessage[], RcKind[]>()
+
+/** Tipo de cada mensagem, na mesma ordem (guardado por lista). */
+export function kindsOf(messages: RaceControlMessage[]): RcKind[] {
+  let kinds = kindsCache.get(messages)
+  if (!kinds) {
+    kinds = messages.map(rcKind)
+    kindsCache.set(messages, kinds)
+  }
+  return kinds
+}
+
+/** Quantas mensagens já saíram até o instante `t` (mensagens em ordem de tempo; busca binária). */
+export function countUntil(messages: RaceControlMessage[], t: number): number {
+  let lo = 0
+  let hi = messages.length
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (messages[mid].time <= t) lo = mid + 1
+    else hi = mid
+  }
+  return lo
+}
+
+/**
+ * Mensagens a mostrar, da mais recente para a mais antiga. `count` limita às primeiras
+ * mensagens (as que já saíram no replay, de `countUntil`); null = todas.
+ */
 export function visibleMessages(
   messages: RaceControlMessage[],
-  now: number | null,
+  count: number | null,
   kinds: ReadonlySet<RcKind>,
 ): RaceControlMessage[] {
+  const kindOf = kindsOf(messages)
   const out: RaceControlMessage[] = []
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i]
-    if (now != null && m.time > now) continue
-    if (kinds.has(rcKind(m))) out.push(m)
+  for (let i = Math.min(count ?? messages.length, messages.length) - 1; i >= 0; i--) {
+    if (kinds.has(kindOf[i])) out.push(messages[i])
   }
   return out
 }
 
-/** Quantas mensagens de cada tipo (até `now`), para os rótulos dos filtros. */
-export function countByKind(messages: RaceControlMessage[], now: number | null): Record<RcKind, number> {
+/** Quantas mensagens de cada tipo entre as primeiras `count` (null = todas), para os rótulos dos filtros. */
+export function countByKind(messages: RaceControlMessage[], count: number | null): Record<RcKind, number> {
+  const kindOf = kindsOf(messages)
   const out = Object.fromEntries(RC_KINDS.map((k) => [k.kind, 0])) as Record<RcKind, number>
-  for (const m of messages) if (now == null || m.time <= now) out[rcKind(m)]++
+  const n = Math.min(count ?? messages.length, messages.length)
+  for (let i = 0; i < n; i++) out[kindOf[i]]++
   return out
 }
 

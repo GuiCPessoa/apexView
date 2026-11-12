@@ -182,6 +182,9 @@ def _message(topic: str, data, ts: float) -> Message:
 
 
 def _get(path: str, timeout: int = 120) -> str:
+    # nunca sai de /static/: "." e ".." mudariam o endereço que recebe o token
+    if any(part in ("", ".", "..") for part in path.strip("/").split("/")):
+        raise ValueError(f"Caminho inválido no arquivo da F1: {path!r}")
     resp = requests.get(f"{BASE_URL}/static/{quote(path)}", headers=auth_headers(), timeout=timeout)
     resp.raise_for_status()
     return resp.content.decode("utf-8-sig")

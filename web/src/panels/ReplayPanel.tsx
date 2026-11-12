@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Card from '../components/Card'
 import RaceControlFeed from '../components/RaceControlFeed'
 import WeatherPanel from '../components/WeatherPanel'
@@ -14,7 +14,10 @@ import {
   positionCoverage,
   statusAt,
   towerAt,
+  type Projection,
+  type TowerRow,
 } from '../lib/replay'
+import { countUntil } from '../lib/raceControl'
 import type {
   DriverPositions,
   DriverResult,
@@ -29,6 +32,9 @@ import { COMPOUND } from '../lib/tyres'
 import type { FocusProps } from './RacePanels'
 
 const SPEEDS = [1, 4, 16]
+// O cartão de clima acompanha o replay em passos (as amostras são de 1 por minuto):
+// assim ele não redesenha a cada quadro da animação.
+const WEATHER_STEP_S = 5
 
 interface Props extends FocusProps {
   path: string
@@ -208,6 +214,10 @@ function Replay({ meta, results, laps, data, focus, onToggle, onLap }: Omit<Prop
     [start, end],
   )
 
+  // quantas mensagens já saíram: só muda quando sai uma nova, então o feed não redesenha a cada quadro
+  const rcCount = data.raceControl && feedSynced ? countUntil(data.raceControl, t) : null
+  const weatherNow = Math.floor(t / WEATHER_STEP_S) * WEATHER_STEP_S
+
   const r = proj.size * 0.011
   // pilotos em foco por cima dos outros
   const cars = data.positions
@@ -240,14 +250,7 @@ function Replay({ meta, results, laps, data, focus, onToggle, onLap }: Omit<Prop
           </p>
         )}
         <svg viewBox={proj.viewBox} className="track-map" role="img" aria-label={`Traçado de ${meta.location}`}>
-          <polygon points={outline} className="track-outer" strokeWidth={proj.size * 0.024} />
-          <polygon points={outline} className="track-inner" strokeWidth={proj.size * 0.006} />
-          <line {...finishLine} className="finish-line" strokeWidth={proj.size * 0.005} />
-          {corners.map((c) => (
-            <text key={c.label} x={c.x} y={c.y} className="corner-label" fontSize={proj.size * 0.022}>
-              {c.label}
-            </text>
-          ))}
+          <TrackBase outline={outline} finishLine={finishLine} corners={corners} size={proj.size} />
           {cars.map(({ driver, pos }) => {
             const [x, y] = proj.project(pos[0], pos[1])
             const on = focus.includes(driver)
@@ -311,31 +314,7 @@ function Replay({ meta, results, laps, data, focus, onToggle, onLap }: Omit<Prop
       </Card>
 
       <Card title="Torre" span={4} className="tower-card" aside={<span className="muted">acompanha o replay</span>}>
-        <ol className="tower" aria-label="Posições">
-          {tower.map((row) => {
-            const c = row.compound ? COMPOUND[row.compound] : null
-            return (
-              <li
-                key={row.driver}
-                className={`${focus.includes(row.driver) ? 'focused' : ''} ${row.out ? 'out' : ''} ${dimmed(focus, row.driver) ? 'dim' : ''}`}
-                onClick={() => onToggle(row.driver)}
-              >
-                <span className="t-pos">{row.out ? '' : row.position}</span>
-                <span className="team-bar" style={{ background: row.teamColor ?? 'var(--muted)' }} />
-                <span className="t-driver">{row.driver}</span>
-                {row.inPit && <span className="pit-tag">PIT</span>}
-                {row.finished && !row.out && (
-                  <span className="fin-tag" aria-label="Terminou">
-                    🏁
-                  </span>
-                )}
-                <span className="t-spacer" />
-                {c && !row.out && <span className={`tyre ${c.className}`}>{c.letter}</span>}
-                <span className="t-gap">{row.gap}</span>
-              </li>
-            )
-          })}
-        </ol>
+        <Tower rows={tower} focus={focus} onToggle={onToggle} />
       </Card>
 
       {data.raceControl && (
@@ -356,7 +335,7 @@ function Replay({ meta, results, laps, data, focus, onToggle, onLap }: Omit<Prop
         >
           <RaceControlFeed
             messages={data.raceControl}
-            now={feedSynced ? t : null}
+            count={rcCount}
             formatTime={messageTime}
             onPick={pickMessage}
             focus={focus}
@@ -368,9 +347,84 @@ function Replay({ meta, results, laps, data, focus, onToggle, onLap }: Omit<Prop
       )}
       {data.weather && (
         <Card title="Clima" span={4} className="weather-card" aside={<span className="muted">acompanha o replay</span>}>
-          <WeatherPanel samples={data.weather} now={t} formatX={raceClock} />
+          <WeatherPanel samples={data.weather} now={weatherNow} formatX={raceClock} />
         </Card>
       )}
     </>
   )
 }
+
+/** Parte fixa do mapa (traçado, linha de chegada e número das curvas): não muda durante o replay. */
+const TrackBase = memo(function TrackBase({
+  outline,
+  finishLine,
+  corners,
+  size,
+}: {
+  outline: string
+  finishLine: { x1: number; y1: number; x2: number; y2: number }
+  corners: { label: string; x: number; y: number }[]
+  size: Projection['size']
+}) {
+  return (
+    <>
+      <polygon points={outline} className="track-outer" strokeWidth={size * 0.024} />
+      <polygon points={outline} className="track-inner" strokeWidth={size * 0.006} />
+      <line {...finishLine} className="finish-line" strokeWidth={size * 0.005} />
+      {corners.map((c) => (
+        <text key={c.label} x={c.x} y={c.y} className="corner-label" fontSize={size * 0.022}>
+          {c.label}
+        </text>
+      ))}
+    </>
+  )
+})
+
+const sameRows = (a: TowerRow[], b: TowerRow[]) =>
+  a.length === b.length &&
+  a.every((r, i) => {
+    const o = b[i]
+    return (
+      r.driver === o.driver &&
+      r.gap === o.gap &&
+      r.compound === o.compound &&
+      r.inPit === o.inPit &&
+      r.out === o.out &&
+      r.finished === o.finished &&
+      r.position === o.position
+    )
+  })
+
+/** Torre de posições. A ordem só muda quando alguém fecha uma volta ou para nos boxes, não a cada quadro. */
+const Tower = memo(
+  function Tower({ rows, focus, onToggle }: { rows: TowerRow[]; focus: string[]; onToggle: (d: string) => void }) {
+    return (
+      <ol className="tower" aria-label="Posições">
+        {rows.map((row) => {
+          const c = row.compound ? COMPOUND[row.compound] : null
+          return (
+            <li
+              key={row.driver}
+              className={`${focus.includes(row.driver) ? 'focused' : ''} ${row.out ? 'out' : ''} ${dimmed(focus, row.driver) ? 'dim' : ''}`}
+              onClick={() => onToggle(row.driver)}
+            >
+              <span className="t-pos">{row.out ? '' : row.position}</span>
+              <span className="team-bar" style={{ background: row.teamColor ?? 'var(--muted)' }} />
+              <span className="t-driver">{row.driver}</span>
+              {row.inPit && <span className="pit-tag">PIT</span>}
+              {row.finished && !row.out && (
+                <span className="fin-tag" aria-label="Terminou">
+                  🏁
+                </span>
+              )}
+              <span className="t-spacer" />
+              {c && !row.out && <span className={`tyre ${c.className}`}>{c.letter}</span>}
+              <span className="t-gap">{row.gap}</span>
+            </li>
+          )
+        })}
+      </ol>
+    )
+  },
+  (a, b) => a.focus === b.focus && a.onToggle === b.onToggle && sameRows(a.rows, b.rows),
+)

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { memo, useCallback, useMemo } from 'react'
 import type uPlot from 'uplot'
 import { chartTheme } from '../lib/chart'
 import { rainSpans, weatherAt, windDirection, windKmh } from '../lib/weather'
@@ -16,8 +16,11 @@ interface Props {
   formatX: (t: number) => string
 }
 
-/** Condições no instante mostrado e a evolução das temperaturas, com os períodos de chuva. */
-export default function WeatherPanel({ samples, now, formatX }: Props) {
+/**
+ * Condições no instante mostrado e a evolução das temperaturas, com os períodos de chuva.
+ * Memoizado: quem usa no replay passa `now` arredondado, para não redesenhar a cada quadro.
+ */
+export default memo(function WeatherPanel({ samples, now, formatX }: Props) {
   const current = weatherAt(samples, now)
   if (!current) return <p className="muted">Sem dados de clima nesta sessão.</p>
 
@@ -46,7 +49,7 @@ export default function WeatherPanel({ samples, now, formatX }: Props) {
       {samples.length > 1 && <TempChart samples={samples} now={now} formatX={formatX} />}
     </>
   )
-}
+})
 
 function TempChart({ samples, now, formatX }: { samples: WeatherSample[]; now: number | null; formatX: (t: number) => string }) {
   const data = useMemo(

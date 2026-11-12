@@ -11,7 +11,9 @@ exportado pelo pipeline) o site mostra o ao vivo, sem escolha. Fora disso, mostr
 e o site pode escolher qualquer sessão: as já gravadas ou as do arquivo da F1 (baixadas na hora).
 
 O site (npm run dev) conecta em ws://127.0.0.1:8000/ws. O servidor só escuta na própria
-máquina (127.0.0.1); não exponha à internet.
+máquina (127.0.0.1); não exponha à internet. Pelo navegador, só o site local e o site
+publicado podem conectar (veja ALLOWED_ORIGINS); outros endereços entram com --allow-origin
+ou com a variável APEXVIEW_ALLOWED_ORIGINS (separados por vírgula).
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ import contextlib
 import copy
 import json
 import logging
+import os
 import re
 import sys
 import time
@@ -31,6 +34,7 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 import feed
 import recording
@@ -44,7 +48,32 @@ SPEEDS = (1, 2, 4, 8, 16, 32)
 SCHEDULE_CHECK_S = 30  # modo automático: confere o calendário a cada 30 s
 INDEX_TTL_S = 600  # lista de sessões do ano corrente no arquivo da F1: relê a cada 10 min
 FIRST_ARCHIVE_YEAR = 2018  # o arquivo da F1 começa em 2018
-SESSION_PATH = re.compile(r"^\d{4}/[^/]+/[^/]+/$")
+# Caminho de sessão no arquivo da F1: ano/GP/sessão/. Cada parte só com letras, números, "_", "-" e "."
+# (nada de "..", "?", "#", "%" ou "\\", que mudariam o endereço pedido ao servidor da F1).
+SESSION_PATH = re.compile(r"^\d{4}/(?!\.+/)[\w.\-]+/(?!\.+/)[\w.\-]+/$")
+
+# ---------- Quem pode conectar ----------
+# O servidor usa a assinatura F1 TV de quem roda. Sem esta checagem, qualquer site aberto no
+# navegador poderia conectar em ws://127.0.0.1:8000 (WebSocket não tem a proteção de mesma origem),
+# ler o feed e mandar comandos, como baixar sessões do arquivo.
+ALLOWED_ORIGINS = ("https://apexview-peach.vercel.app",)  # site publicado
+LOCAL_ORIGIN = re.compile(r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$")  # npm run dev / preview
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]  # cabeçalho Host aceito (barra DNS rebinding)
+MAX_CLIENTS = 16
+WS_MAX_MESSAGE_BYTES = 64 * 1024  # os comandos do site são JSON de poucos bytes
+
+
+def allowed_origins(extra: list[str] | tuple[str, ...] = ()) -> frozenset[str]:
+    """Origens liberadas além das locais: as padrão, as de APEXVIEW_ALLOWED_ORIGINS e as de --allow-origin."""
+    env = os.environ.get("APEXVIEW_ALLOWED_ORIGINS", "").split(",")
+    return frozenset(o.strip().rstrip("/") for o in (*ALLOWED_ORIGINS, *env, *extra) if o.strip())
+
+
+def origin_allowed(origin: str | None, allowed: frozenset[str]) -> bool:
+    """Navegadores sempre mandam Origin no WebSocket; sem ele é um cliente local (script, teste)."""
+    if origin is None:
+        return True
+    return bool(LOCAL_ORIGIN.match(origin)) or origin in allowed
 
 
 class Hub:
@@ -498,7 +527,10 @@ def create_app(args: argparse.Namespace) -> FastAPI:
             with contextlib.suppress(asyncio.CancelledError):
                 await hub.task
 
-    app = FastAPI(title="apexView ao vivo", lifespan=lifespan)
+    # sem /docs e /openapi.json: o servidor só serve o próprio site
+    app = FastAPI(title="apexView ao vivo", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
+    origins = allowed_origins(getattr(args, "allow_origin", None) or ())
 
     @app.get("/api/status")
     def status() -> dict:
@@ -507,6 +539,14 @@ def create_app(args: argparse.Namespace) -> FastAPI:
 
     @app.websocket("/ws")
     async def websocket(ws: WebSocket) -> None:
+        origin = ws.headers.get("origin")
+        if not origin_allowed(origin, origins):
+            log.warning("Conexão recusada: origem %r não liberada (use --allow-origin para liberar)", origin)
+            await ws.close(code=1008)
+            return
+        if len(hub.clients) >= MAX_CLIENTS:
+            await ws.close(code=1013)
+            return
         await ws.accept()
         hub.clients.add(ws)
         try:
@@ -540,6 +580,8 @@ def main() -> None:
         p.add_argument("--no-record", action="store_true", help="não grava o feed em recordings/")
     for p in (auto, live, replay):
         p.add_argument("--port", type=int, default=8000)
+        p.add_argument("--allow-origin", action="append", default=[], metavar="URL",
+                       help="libera mais um endereço de site para conectar (ex.: https://meu-site.vercel.app)")
     argv = sys.argv[1:]
     if not argv or (argv[0].startswith("-") and argv[0] not in ("-h", "--help")):
         argv = ["auto", *argv]  # sem subcomando: automático
@@ -552,7 +594,7 @@ def main() -> None:
             log.info("Token F1 TV válido até %s", time.strftime("%d/%m %H:%M", time.localtime(exp)))
         except feed.TokenError as exc:
             raise SystemExit(str(exc)) from None
-    uvicorn.run(create_app(args), host="127.0.0.1", port=args.port, log_level="warning")
+    uvicorn.run(create_app(args), host="127.0.0.1", port=args.port, log_level="warning", ws_max_size=WS_MAX_MESSAGE_BYTES)
 
 
 if __name__ == "__main__":

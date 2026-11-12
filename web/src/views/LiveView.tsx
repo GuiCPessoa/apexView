@@ -43,7 +43,13 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
   const { status, snapshot, send, requestTraces, catalog, requestCatalog } = useLiveFeed(delay)
   const onToggle = useCallback((d: string) => setFocus((f) => toggleFocus(f, d)), [])
   const track = useExportedTrack(index, snapshot)
-  const teamColors = useMemo(() => new Map((snapshot?.drivers ?? []).map((d) => [d.driver, d.teamColor])), [snapshot?.drivers])
+  // cores por piloto com identidade estável (o snapshot muda 4×/s; as cores, quase nunca):
+  // assim o feed da direção de prova não redesenha a cada snapshot
+  const colorKey = (snapshot?.drivers ?? []).map((d) => `${d.driver}:${d.teamColor ?? ''}`).join(',')
+  const teamColors = useMemo(
+    () => new Map(colorKey ? colorKey.split(',').map((p) => p.split(':') as [string, string]).map(([d, c]) => [d, c || null]) : []),
+    [colorKey],
+  )
 
   if (!snapshot) return <Offline status={status} />
 
@@ -179,7 +185,7 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
           <Card title="Direção de prova" span={12} className="rc-card" aside={<span className="muted">mensagens da sessão inteira</span>}>
             <RaceControlFeed
               messages={s.raceControl ?? []}
-              now={null}
+              count={null}
               formatTime={messageTime}
               focus={focus}
               onToggle={onToggle}
@@ -588,9 +594,7 @@ function CarsCard({
 }) {
   // "um piloto": telemetria de um carro só, sem comparação. Pôr um segundo piloto em foco volta a comparar.
   const [solo, setSolo] = useState(false)
-  useEffect(() => {
-    if (focus.length >= 2) setSolo(false)
-  }, [focus])
+  if (solo && focus.length >= 2) setSolo(false) // ajuste durante o render: sem efeito nem render extra em cascata
   const chooseSolo = (on: boolean) => {
     setSolo(on)
     if (on && focus.length > 1) onFocusChange(focus.slice(0, 1))

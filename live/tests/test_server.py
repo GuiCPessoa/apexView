@@ -39,3 +39,90 @@ def test_campos_grandes_so_vao_quando_mudam():
     more = {"outline": [[0, 0]], "raceControl": [{"message": "A"}, {"message": "B"}], "weatherHistory": [], "time": 3}
     server.drop_unchanged(more, sent)
     assert set(more) == {"raceControl", "time"}
+
+
+def test_caminho_de_sessao_so_aceita_nomes_simples():
+    ok = "2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/"
+    assert server.SESSION_PATH.match(ok)
+    assert server.SESSION_PATH.match("2024/2024-02-23_Pre-Season_Testing/2024-02-21_Practice_1/")
+    for bad in [
+        "2026/../../",  # sairia de /static/
+        "2026/./x/",
+        "2026/a/../",
+        "2026/a?x=1/b/",
+        "2026/a#b/c/",
+        "2026/a%2f..%2f/b/",
+        "2026/a b/c/",
+        "2026/a\\b/c/",
+        "2026/a/b/c/",
+        "2026/a/b",
+    ]:
+        assert not server.SESSION_PATH.match(bad), bad
+
+
+def test_feed_recusa_caminho_com_ponto_ponto():
+    import pytest
+
+    for bad in ["2026/../Index.json", "2026//x/Index.json", "./Index.json"]:
+        with pytest.raises(ValueError):
+            feed._get(bad)
+
+
+def test_origens_liberadas(monkeypatch):
+    monkeypatch.setenv("APEXVIEW_ALLOWED_ORIGINS", "https://outro.example/, ")
+    allowed = server.allowed_origins(["https://extra.example"])
+    assert server.origin_allowed(None, allowed)  # script local, sem navegador
+    assert server.origin_allowed("http://localhost:5173", allowed)
+    assert server.origin_allowed("http://127.0.0.1:4173", allowed)
+    assert server.origin_allowed("https://apexview-peach.vercel.app", allowed)
+    assert server.origin_allowed("https://outro.example", allowed)
+    assert server.origin_allowed("https://extra.example", allowed)
+    for bad in ["https://evil.example", "http://localhost.evil.example", "http://127.0.0.1.evil.example:5173",
+                "https://apexview-peach.vercel.app.evil.example", "null", ""]:
+        assert not server.origin_allowed(bad, allowed), bad
+
+
+def _client():
+    import argparse
+
+    from starlette.testclient import TestClient
+
+    # sem `with`: o lifespan (feed, gravações) não roda; só as rotas
+    return TestClient(server.create_app(argparse.Namespace(mode="replay")), base_url="http://127.0.0.1:8000")
+
+
+WS_URL = "ws://127.0.0.1:8000/ws"
+
+
+def test_websocket_recusa_site_desconhecido():
+    import pytest
+    from starlette.websockets import WebSocketDisconnect
+
+    client = _client()
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with client.websocket_connect(WS_URL, headers={"origin": "https://evil.example"}):
+            pass
+    assert exc.value.code == 1008  # recusada antes de aceitar: o navegador vê HTTP 403
+    assert not server.hub.clients
+
+
+def test_websocket_aceita_site_local_e_manda_snapshot():
+    client = _client()
+    with client.websocket_connect(WS_URL, headers={"origin": "http://localhost:5173"}) as ws:
+        assert ws.receive_json()["type"] == "snapshot"
+
+
+def test_websocket_recusa_host_desconhecido():
+    import pytest
+    from starlette.testclient import WebSocketDenialResponse
+
+    with pytest.raises(WebSocketDenialResponse):
+        with _client().websocket_connect("ws://evil.example:8000/ws"):
+            pass
+
+
+def test_host_desconhecido_e_recusado():
+    client = _client()
+    assert client.get("/api/status").status_code == 200
+    assert client.get("/api/status", headers={"host": "evil.example:8000"}).status_code == 400
+    assert client.get("/docs").status_code == 404
