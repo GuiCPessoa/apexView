@@ -223,6 +223,31 @@ export interface TrackStatusChange {
   message: string | null
 }
 
+/** Uma linha de weather.json (~1 amostra por minuto). No modo ao vivo, `time` é epoch UTC (s). */
+export interface WeatherSample {
+  time: number // segundos de sessão
+  airTemp: number | null // °C
+  trackTemp: number | null // °C
+  humidity: number | null // %
+  pressure: number | null // mbar
+  rainfall: boolean
+  windSpeed: number | null // m/s
+  windDirection: number | null // graus, de onde o vento vem (0 = norte)
+}
+
+/** Uma linha de race_control.json. No modo ao vivo, `time` é epoch UTC (s). */
+export interface RaceControlMessage {
+  time: number // segundos de sessão
+  lap: number | null
+  category: string | null // Flag, SafetyCar, Drs, CarEvent, Other
+  flag: string | null // GREEN, YELLOW, DOUBLE YELLOW, RED, BLUE, CLEAR, CHEQUERED, BLACK AND WHITE...
+  scope: string | null // Track, Sector, Driver
+  sector: number | null // setor de bandeira (marshal sector)
+  driver: string | null // sigla do piloto citado
+  status: string | null // DEPLOYED, ENDING, IN THIS LAP... (safety car e DRS)
+  message: string
+}
+
 /** positions/{DRV}.json.gz — amostra i no tempo start + i / hz */
 export interface DriverPositions {
   driver: string

@@ -43,9 +43,22 @@ export class DelayBuffer<T> {
   }
 }
 
-/** Completa um snapshot sem traçado com o último traçado recebido (o servidor só manda quando muda). */
-export function withOutline(snap: LiveSnapshot, last: LiveSnapshot['outline']): LiveSnapshot {
-  return 'outline' in snap ? snap : { ...snap, outline: last ?? null }
+/** Campos que o servidor só manda quando mudam. */
+const STICKY_KEYS = ['outline', 'raceControl', 'weatherHistory'] as const
+export type StickyFields = Required<Pick<LiveSnapshot, (typeof STICKY_KEYS)[number]>>
+export const emptySticky = (): StickyFields => ({ outline: null, raceControl: [], weatherHistory: [] })
+
+/**
+ * Completa um snapshot com os últimos valores recebidos dos campos que só vêm quando mudam
+ * (traçado, mensagens da direção de prova, histórico do clima) e guarda os que vieram em `last`.
+ */
+export function withSticky(snap: LiveSnapshot, last: StickyFields): LiveSnapshot {
+  const out = { ...snap }
+  for (const key of STICKY_KEYS) {
+    if (key in snap && snap[key] !== undefined) (last as Record<string, unknown>)[key] = snap[key]
+    ;(out as Record<string, unknown>)[key] = last[key]
+  }
+  return out
 }
 
 /** "+1.234" -> "+1.234"; "LAP 34" -> "Volta 34"; "1 L" -> "+1 V". */
@@ -98,7 +111,7 @@ export function useLiveFeed(delayS: number) {
   const [catalog, setCatalog] = useState<LiveCatalog | null>(null)
   const lastKey = useRef<string | null>(null)
   const buffer = useRef(new DelayBuffer<LiveSnapshot>())
-  const outline = useRef<LiveSnapshot['outline']>(null)
+  const sticky = useRef<StickyFields>(emptySticky())
   const socket = useRef<WebSocket | null>(null)
   const delayRef = useRef(delayS)
   const traceDrivers = useRef<string[]>([])
@@ -132,8 +145,7 @@ export function useLiveFeed(delayS: number) {
             buffer.current.clear()
             lastKey.current = key
           }
-          if ('outline' in snap) outline.current = snap.outline
-          buffer.current.push(withOutline(snap, outline.current), Date.now())
+          buffer.current.push(withSticky(snap, sticky.current), Date.now())
         } catch {
           // mensagem inválida: ignora
         }

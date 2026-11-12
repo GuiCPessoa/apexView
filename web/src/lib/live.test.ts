@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LiveSnapshot } from '../types/live'
-import { DelayBuffer, formatLiveGap, sourceKey, tracePath, withOutline } from './live'
+import { DelayBuffer, emptySticky, formatLiveGap, sourceKey, tracePath, withSticky } from './live'
 
 describe('DelayBuffer', () => {
   it('devolve o valor de alguns segundos atrás', () => {
@@ -35,12 +35,18 @@ describe('formatLiveGap', () => {
   })
 })
 
-describe('withOutline', () => {
-  it('mantém o último traçado quando o snapshot não traz', () => {
-    const snap = { type: 'snapshot' } as LiveSnapshot
+describe('withSticky', () => {
+  it('mantém o último valor dos campos que só vêm quando mudam', () => {
+    const last = emptySticky()
     const outline: [number, number][] = [[0, 0]]
-    expect(withOutline(snap, outline).outline).toBe(outline)
-    expect(withOutline({ ...snap, outline: null }, outline).outline).toBeNull()
+    const rc = [{ time: 1, lap: 1, category: 'Flag', flag: 'GREEN', scope: 'Track', sector: null, driver: null, status: null, message: 'GREEN LIGHT' }]
+    const first = withSticky({ type: 'snapshot', outline, raceControl: rc } as LiveSnapshot, last)
+    expect(first.outline).toBe(outline)
+    expect(first.weatherHistory).toEqual([])
+    const next = withSticky({ type: 'snapshot' } as LiveSnapshot, last)
+    expect(next.outline).toBe(outline)
+    expect(next.raceControl).toBe(rc)
+    expect(withSticky({ type: 'snapshot', outline: null } as LiveSnapshot, last).outline).toBeNull()
   })
 })
 

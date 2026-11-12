@@ -22,6 +22,14 @@ describe('compareLaps', () => {
     expect(c.d).toEqual([0, 50, 100])
     expect(c.delta).toEqual([0, 0.25, 0.5])
   })
+
+  it('sem B, só a volta de A na grade inteira', () => {
+    const c = compareLaps(a, null, 50)
+    expect(c.d).toEqual([0, 50, 100])
+    expect(c.a.speed).toEqual([360, 360, 360])
+    expect(c.b).toBeNull()
+    expect(c.delta).toBeNull()
+  })
 })
 
 describe('cores', () => {

@@ -425,18 +425,27 @@ async def handle_command(ws: WebSocket, cmd: dict) -> None:
         restart_replay(float(cmd["value"]))
 
 
+# Campos grandes que só vão quando mudam (o site guarda o último); quem conecta recebe o completo
+STICKY_KEYS = ("outline", "raceControl", "weatherHistory")
+
+
+def drop_unchanged(snap: dict, sent: dict) -> None:
+    """Tira do snapshot os campos de STICKY_KEYS iguais aos últimos enviados e atualiza `sent`."""
+    for key in STICKY_KEYS:
+        if key in sent and snap[key] == sent[key]:
+            del snap[key]
+        else:
+            sent[key] = snap[key]
+
+
 async def broadcast() -> None:
-    sent_outline = None
+    sent: dict = {}
     while True:
         await asyncio.sleep(TICK_S)
         if not hub.clients:
             continue
         snap = hub.snapshot()
-        # o traçado só vai quando muda (o site guarda o último); quem conecta recebe o completo
-        if snap["outline"] is sent_outline:
-            del snap["outline"]
-        else:
-            sent_outline = snap["outline"]
+        drop_unchanged(snap, sent)
         text = json.dumps(snap, ensure_ascii=False, separators=(",", ":"))
         now = hub.now()
         traces: dict[tuple, str] = {}  # clientes que pedem os mesmos pilotos recebem o mesmo texto

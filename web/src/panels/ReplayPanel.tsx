@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Card from '../components/Card'
-import { loadPositions, loadTrack, loadTrackStatus } from '../lib/data'
+import RaceControlFeed from '../components/RaceControlFeed'
+import WeatherPanel from '../components/WeatherPanel'
+import { loadPositions, loadRaceControl, loadTrack, loadTrackStatus, loadWeather } from '../lib/data'
 import { dimmed } from '../lib/focus'
 import {
   TRACK_STATUS_LABEL,
@@ -13,7 +15,16 @@ import {
   statusAt,
   towerAt,
 } from '../lib/replay'
-import type { DriverPositions, DriverResult, Lap, SessionMeta, Track, TrackStatusChange } from '../types/data'
+import type {
+  DriverPositions,
+  DriverResult,
+  Lap,
+  RaceControlMessage,
+  SessionMeta,
+  Track,
+  TrackStatusChange,
+  WeatherSample,
+} from '../types/data'
 import { COMPOUND } from '../lib/tyres'
 import type { FocusProps } from './RacePanels'
 
@@ -32,6 +43,9 @@ interface ReplayData {
   track: Track
   status: TrackStatusChange[]
   positions: DriverPositions[]
+  /** null = sessão exportada antes de existir o arquivo */
+  weather: WeatherSample[] | null
+  raceControl: RaceControlMessage[] | null
 }
 
 /** Mapa com replay (8 colunas) e torre de posições (4 colunas), como dois cartões da grade. */
@@ -52,8 +66,11 @@ export default function ReplayPanel({ path, ...props }: Props) {
         }),
       ),
     )
-    Promise.all([loadTrack(path), loadTrackStatus(path), positions])
-      .then(([track, status, positions]) => !cancelled && setData({ track, status, positions }))
+    Promise.all([loadTrack(path), loadTrackStatus(path), positions, loadWeather(path), loadRaceControl(path)])
+      .then(
+        ([track, status, positions, weather, raceControl]) =>
+          !cancelled && setData({ track, status, positions, weather, raceControl }),
+      )
       .catch((e: Error) => !cancelled && setError(e.message))
     return () => {
       cancelled = true
@@ -178,6 +195,18 @@ function Replay({ meta, results, laps, data, focus, onToggle, onLap }: Omit<Prop
     const target = Math.max(0, Math.min(model.totalLaps, leaderLaps + delta))
     setT(target === 0 ? start : model.firstEnd[target] + 0.01)
   }
+
+  // relógio da prova (0:00 = largada) nos horários do feed e do gráfico de clima
+  const raceClock = useCallback((v: number) => (v < start ? `-${formatClock(start - v)}` : formatClock(v - start)), [start])
+  const messageTime = useCallback((m: RaceControlMessage) => raceClock(m.time), [raceClock])
+  const [feedSynced, setFeedSynced] = useState(true)
+  const pickMessage = useCallback(
+    (m: RaceControlMessage) => {
+      setPlaying(false)
+      setT(Math.max(start, Math.min(end, m.time)))
+    },
+    [start, end],
+  )
 
   const r = proj.size * 0.011
   // pilotos em foco por cima dos outros
@@ -308,6 +337,40 @@ function Replay({ meta, results, laps, data, focus, onToggle, onLap }: Omit<Prop
           })}
         </ol>
       </Card>
+
+      {data.raceControl && (
+        <Card
+          title="Direção de prova"
+          span={8}
+          className="rc-card"
+          aside={
+            <div className="seg" role="group" aria-label="Mensagens mostradas">
+              <button className={feedSynced ? 'active' : undefined} onClick={() => setFeedSynced(true)}>
+                Até o replay
+              </button>
+              <button className={feedSynced ? undefined : 'active'} onClick={() => setFeedSynced(false)}>
+                Prova inteira
+              </button>
+            </div>
+          }
+        >
+          <RaceControlFeed
+            messages={data.raceControl}
+            now={feedSynced ? t : null}
+            formatTime={messageTime}
+            onPick={pickMessage}
+            focus={focus}
+            onToggle={onToggle}
+            teamColors={colors}
+          />
+          <p className="foot">Clique numa mensagem para levar o replay até ela. Horários no relógio da prova (0:00 = largada).</p>
+        </Card>
+      )}
+      {data.weather && (
+        <Card title="Clima" span={4} className="weather-card" aside={<span className="muted">acompanha o replay</span>}>
+          <WeatherPanel samples={data.weather} now={t} formatX={raceClock} />
+        </Card>
+      )}
     </>
   )
 }

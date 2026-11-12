@@ -26,3 +26,16 @@ def test_catalogo_sem_arquivo_usa_gravacoes():
     meetings = server.meetings_from_recordings(recs, 2026)
     assert [m["name"] for m in meetings] == ["A", "B"]
     assert [s["path"] for s in meetings[1]["sessions"]] == ["2026/b/race/"]
+
+
+def test_campos_grandes_so_vao_quando_mudam():
+    sent: dict = {}
+    first = {"outline": [[0, 0]], "raceControl": [{"message": "A"}], "weatherHistory": [], "time": 1}
+    server.drop_unchanged(first, sent)
+    assert set(first) == {"outline", "raceControl", "weatherHistory", "time"}
+    same = {"outline": [[0, 0]], "raceControl": [{"message": "A"}], "weatherHistory": [], "time": 2}
+    server.drop_unchanged(same, sent)
+    assert set(same) == {"time"}
+    more = {"outline": [[0, 0]], "raceControl": [{"message": "A"}, {"message": "B"}], "weatherHistory": [], "time": 3}
+    server.drop_unchanged(more, sent)
+    assert set(more) == {"raceControl", "time"}

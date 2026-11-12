@@ -1,7 +1,8 @@
 """Exporta uma sessão de F1 para data/{ano}/{rodada}-{local}/{sessao}/.
 
-Gera resultados, voltas, traçado da pista e telemetria por piloto. Para corridas
-e sprints, também os dados do replay (posições X/Y por piloto e bandeiras).
+Gera resultados, voltas, traçado da pista, clima, mensagens da direção de prova e
+telemetria por piloto. Para corridas e sprints, também os dados do replay
+(posições X/Y por piloto e bandeiras).
 
 Uso: python export_session.py 2024 Monza R
 """
@@ -16,6 +17,7 @@ import pandas as pd
 
 import replay
 import telemetry
+import timeline
 from common import (
     DATA_DIR,
     SCHEMA_VERSION,
@@ -187,8 +189,8 @@ def export_session(year: int, gp: str | int, ident: str, data_dir: Path = DATA_D
     session = fastf1.get_session(year, gp, ident)
     session_code = SESSION_CODES.get(session.name, slugify(session.name).upper())
     with_replay = session_code in REPLAY_SESSIONS
-    # messages=True: mensagens da direção de prova, usadas para marcar voltas anuladas
-    session.load(laps=True, telemetry=True, weather=False, messages=True)
+    # messages=True: mensagens da direção de prova (feed e voltas anuladas)
+    session.load(laps=True, telemetry=True, weather=True, messages=True)
 
     slug = f"{int(session.event['RoundNumber']):02d}-{slugify(session.event['Location'])}"
     out = data_dir / str(year) / slug / session_code
@@ -199,6 +201,8 @@ def export_session(year: int, gp: str | int, ident: str, data_dir: Path = DATA_D
     write_json(out / "results.json", results)
     write_json(out / "laps.json", laps)
     write_json(out / "track.json", replay.build_track(session))
+    write_json(out / "weather.json", timeline.session_weather(session))
+    write_json(out / "race_control.json", timeline.session_race_control(session))
     telemetry_drivers = export_telemetry(session, out)
     replay_info = export_replay(session, out) if with_replay else None
     write_json(out / "meta.json", build_meta(session, session_code, slug, replay_info, telemetry_drivers))

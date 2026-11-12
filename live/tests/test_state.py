@@ -137,3 +137,49 @@ def test_sem_passagem_confiavel_nao_ha_traco():
     st.apply(car_data(T0 + 5, 200))
     st.apply(car_data(T0 + 6, 200))
     assert st.traces(["NOR"], now=T0 + 10)["NOR"] == {"current": None, "previous": None}
+
+
+def test_mensagens_da_direcao_de_prova_completas_e_ate_o_instante():
+    st = feed_state()
+    st.apply(Message(T0, "RaceControlMessages", {"Messages": [
+        {"Utc": utc(T0 - 60), "Lap": 1, "Category": "Flag", "Flag": "GREEN", "Scope": "Track", "Message": "GREEN LIGHT - PIT EXIT OPEN"},
+    ]}))
+    # patches chegam como dicionário de índice
+    st.apply(Message(T0 + 5, "RaceControlMessages", {"Messages": {"1": {
+        "Utc": utc(T0 + 5), "Lap": 3, "Category": "Flag", "Flag": "BLUE", "Scope": "Driver", "RacingNumber": "3",
+        "Message": "WAVED BLUE FLAG FOR CAR 3 (VER)",
+    }}}))
+    st.apply(Message(T0 + 9, "RaceControlMessages", {"Messages": {"2": {
+        "Utc": utc(T0 + 9), "Lap": 4, "Category": "Other",
+        "Message": "FIA STEWARDS: INCIDENT INVOLVING CAR 1 (NOR) UNDER INVESTIGATION",
+    }}}))
+    for i in range(20):  # mais que o antigo limite de 12 mensagens
+        st.apply(Message(T0 + 10 + i, "RaceControlMessages", {"Messages": {str(3 + i): {
+            "Utc": utc(T0 + 10 + i), "Lap": 5, "Category": "Flag", "Flag": "CLEAR", "Scope": "Sector", "Sector": 4,
+            "Message": "CLEAR IN TRACK SECTOR 4",
+        }}}))
+
+    rc = st.snapshot(T0 + 40)["raceControl"]
+    assert len(rc) == 23
+    green, blue, stewards = rc[:3]
+    assert green["time"] == round(T0 - 60, 3) and green["flag"] == "GREEN"
+    assert blue["driver"] == "VER"  # pelo número do carro
+    assert stewards["driver"] == "NOR"  # pelo texto
+    assert rc[-1]["sector"] == 4 and rc[-1]["scope"] == "Sector"
+    # com atraso, só as mensagens até o instante mostrado
+    assert len(st.snapshot(T0 + 6)["raceControl"]) == 2
+
+
+def test_historico_do_clima():
+    st = LiveState()
+    st.apply(Message(T0, "WeatherData", {"AirTemp": "22.1", "TrackTemp": "40.5", "Humidity": "55.0", "Pressure": "1012.3",
+                                        "Rainfall": "0", "WindSpeed": "1.8", "WindDirection": "205"}))
+    st.apply(Message(T0 + 30, "WeatherData", {"AirTemp": "22.1"}))  # nada mudou: não repete
+    st.apply(Message(T0 + 60, "WeatherData", {"TrackTemp": "39.0", "Rainfall": "1"}))
+    snap = st.snapshot(T0 + 90)
+    assert snap["weather"] == {"airTemp": 22.1, "trackTemp": 39.0, "humidity": 55.0, "pressure": 1012.3,
+                               "rainfall": True, "windSpeed": 1.8, "windDirection": 205}
+    history = snap["weatherHistory"]
+    assert [w["time"] for w in history] == [T0, T0 + 60]
+    assert history[0]["trackTemp"] == 40.5 and history[0]["rainfall"] is False
+    assert len(st.snapshot(T0 + 10)["weatherHistory"]) == 1

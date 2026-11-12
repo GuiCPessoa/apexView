@@ -12,9 +12,10 @@ export interface Channels {
 export interface Comparison {
   d: number[] // grade de distância comum (m)
   a: Channels
-  b: Channels
-  /** tempo de B menos tempo de A na mesma distância (s). Positivo = B atrás. */
-  delta: number[]
+  /** null quando só um piloto é mostrado */
+  b: Channels | null
+  /** tempo de B menos tempo de A na mesma distância (s). Positivo = B atrás. null sem B. */
+  delta: number[] | null
 }
 
 /** Interpolação linear; fora do intervalo usa o valor da ponta. `xs` precisa ser crescente. */
@@ -56,11 +57,13 @@ function channelsOn(lap: LapTelemetry, grid: number[]): Channels {
   }
 }
 
-export function compareLaps(a: LapTelemetry, b: LapTelemetry, step = 5): Comparison {
-  const end = Math.min(a.d[a.d.length - 1], b.d[b.d.length - 1])
+/** Alinha as voltas numa grade de distância. Sem `b`, prepara só a volta de A (um piloto). */
+export function compareLaps(a: LapTelemetry, b: LapTelemetry | null, step = 5): Comparison {
+  const end = b ? Math.min(a.d[a.d.length - 1], b.d[b.d.length - 1]) : a.d[a.d.length - 1]
   const d: number[] = []
   for (let x = 0; x <= end; x += step) d.push(x)
   const ca = channelsOn(a, d)
+  if (!b) return { d, a: ca, b: null, delta: null }
   const cb = channelsOn(b, d)
   return { d, a: ca, b: cb, delta: d.map((_, i) => cb.t[i] - ca.t[i]) }
 }

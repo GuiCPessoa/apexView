@@ -32,7 +32,13 @@ function defaultPair(laps: Lap[], results: DriverResult[], available: string[]):
 export default function TelemetryPanel({ path, meta, results, laps, focus, onFocusChange, span }: Props) {
   const available = meta.telemetry
   const defaults = useMemo(() => defaultPair(laps, results, available), [laps, results, available])
-  const [driverA, driverB] = telemetryPair(focus, defaults, available)
+  const [driverA, pairB] = telemetryPair(focus, defaults, available)
+  // "só A": telemetria de um piloto, sem comparação. Pôr um segundo piloto em foco volta a comparar.
+  const [solo, setSolo] = useState(false)
+  useEffect(() => {
+    if (focus.length >= 2) setSolo(false)
+  }, [focus])
+  const driverB = solo ? null : pairB
   // volta escolhida por piloto; sem escolha, a mais rápida dele
   const [lapChoice, setLapChoice] = useState<Record<string, number>>({})
   const lapOf = (d: string | null) => (d ? (lapChoice[d] ?? fastestLap(laps, d)?.lap ?? null) : null)
@@ -60,7 +66,11 @@ export default function TelemetryPanel({ path, meta, results, laps, focus, onFoc
 
   const lapA = driverA ? cache[driverA]?.laps.find((l) => l.lap === lapNumA) : undefined
   const lapB = driverB ? cache[driverB]?.laps.find((l) => l.lap === lapNumB) : undefined
-  const comparison = useMemo(() => (lapA && lapB ? compareLaps(lapA, lapB) : null), [lapA, lapB])
+  const comparison = useMemo(() => {
+    if (!lapA) return null
+    if (!driverB) return compareLaps(lapA, null)
+    return lapB ? compareLaps(lapA, lapB) : null
+  }, [lapA, lapB, driverB])
 
   const resultBy = useMemo(() => new Map(results.map((r) => [r.driver, r])), [results])
   const colorA = resultBy.get(driverA ?? '')?.teamColor ?? '#e10600'
@@ -78,6 +88,15 @@ export default function TelemetryPanel({ path, meta, results, laps, focus, onFoc
     onFocusChange(pair.filter((x): x is string => x != null))
   }
   const swap = () => onFocusChange([driverB, driverA].filter((x): x is string => x != null))
+  const chooseB = (d: string) => {
+    if (d === '') {
+      setSolo(true)
+      onFocusChange(driverA ? [driverA] : [])
+    } else {
+      setSolo(false)
+      setDriver(1, d)
+    }
+  }
 
   const title = 'Telemetria'
   if (available.length === 0) {
@@ -92,7 +111,12 @@ export default function TelemetryPanel({ path, meta, results, laps, focus, onFoc
   const at = comparison && i != null ? comparison : null
 
   return (
-    <Card title={title} span={span} id="telemetry" aside={<span className="muted">clique em dois pilotos para comparar</span>}>
+    <Card
+      title={title}
+      span={span}
+      id="telemetry"
+      aside={<span className="muted">{driverB ? 'clique em dois pilotos para comparar' : 'só um piloto · escolha B para comparar'}</span>}
+    >
       {error && <p className="notice error">{error}</p>}
       <div className="lap-pickers">
         <LapPicker
@@ -106,25 +130,26 @@ export default function TelemetryPanel({ path, meta, results, laps, focus, onFoc
           results={results}
           available={available}
         />
-        <button className="icon-btn swap" onClick={swap} aria-label="Trocar A e B" title="Trocar A e B">
+        <button className="icon-btn swap" onClick={swap} disabled={!driverB} aria-label="Trocar A e B" title="Trocar A e B">
           ⇄
         </button>
         <LapPicker
           tag="B"
-          color={colorB}
+          color={driverB ? colorB : 'var(--muted)'}
           driver={driverB}
           lap={lapNumB}
-          onDriver={(d) => setDriver(1, d)}
+          onDriver={chooseB}
           onLap={(l) => driverB && setLapChoice((c) => ({ ...c, [driverB]: l }))}
           laps={laps}
           results={results}
           available={available}
+          noneLabel="Nenhum · só o piloto A"
         />
       </div>
 
       {!comparison && !error && <p className="muted loading">Carregando telemetria…</p>}
 
-      {comparison && lapA && lapB && (
+      {comparison && lapA && (
         <>
           <div className="tele-summary">
             <div className="table-wrap">
@@ -142,7 +167,7 @@ export default function TelemetryPanel({ path, meta, results, laps, focus, onFoc
                 <tbody>
                   {[
                     { tag: 'A', color: colorA, driver: driverA!, n: lapNumA, info: lapInfoA, lap: lapA },
-                    { tag: 'B', color: colorB, driver: driverB!, n: lapNumB, info: lapInfoB, lap: lapB },
+                    ...(driverB && lapB ? [{ tag: 'B', color: colorB, driver: driverB, n: lapNumB, info: lapInfoB, lap: lapB }] : []),
                   ].map((row) => (
                     <tr key={row.tag}>
                       <td>
@@ -159,17 +184,19 @@ export default function TelemetryPanel({ path, meta, results, laps, focus, onFoc
                       <td className="num mono">{Math.max(...row.lap.speed)}</td>
                     </tr>
                   ))}
-                  <tr className="diff-row">
-                    <td className="muted">B − A</td>
-                    <Diff a={lapA.lapTime} b={lapB.lapTime} />
-                    <Diff a={lapInfoA?.sector1} b={lapInfoB?.sector1} />
-                    <Diff a={lapInfoA?.sector2} b={lapInfoB?.sector2} />
-                    <Diff a={lapInfoA?.sector3} b={lapInfoB?.sector3} />
-                    <td className="num mono muted">
-                      {Math.max(...lapB.speed) - Math.max(...lapA.speed) > 0 ? '+' : ''}
-                      {Math.max(...lapB.speed) - Math.max(...lapA.speed)}
-                    </td>
-                  </tr>
+                  {lapB && (
+                    <tr className="diff-row">
+                      <td className="muted">B − A</td>
+                      <Diff a={lapA.lapTime} b={lapB.lapTime} />
+                      <Diff a={lapInfoA?.sector1} b={lapInfoB?.sector1} />
+                      <Diff a={lapInfoA?.sector2} b={lapInfoB?.sector2} />
+                      <Diff a={lapInfoA?.sector3} b={lapInfoB?.sector3} />
+                      <td className="num mono muted">
+                        {Math.max(...lapB.speed) - Math.max(...lapA.speed) > 0 ? '+' : ''}
+                        {Math.max(...lapB.speed) - Math.max(...lapA.speed)}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -182,19 +209,23 @@ export default function TelemetryPanel({ path, meta, results, laps, focus, onFoc
                 <span>
                   <b>{(at.d[i!] / 1000).toFixed(2)} km</b>
                 </span>
-                <span>
-                  Δ <b>{at.delta[i!] > 0 ? '+' : ''}{at.delta[i!].toFixed(2)} s</b>
-                </span>
+                {at.delta && (
+                  <span>
+                    Δ <b>{at.delta[i!] > 0 ? '+' : ''}{at.delta[i!].toFixed(2)} s</b>
+                  </span>
+                )}
                 <span>
                   <i style={{ background: colorA }} /> {Math.round(at.a.speed[i!])} km/h · {at.a.gear[i!]}ª ·{' '}
                   {Math.round(at.a.throttle[i!])}%{at.a.brake[i!] ? ' · freio' : ''}
                   {at.a.drs[i!] ? ' · DRS' : ''}
                 </span>
-                <span>
-                  <i style={{ background: colorB }} /> {Math.round(at.b.speed[i!])} km/h · {at.b.gear[i!]}ª ·{' '}
-                  {Math.round(at.b.throttle[i!])}%{at.b.brake[i!] ? ' · freio' : ''}
-                  {at.b.drs[i!] ? ' · DRS' : ''}
-                </span>
+                {at.b && (
+                  <span>
+                    <i style={{ background: colorB }} /> {Math.round(at.b.speed[i!])} km/h · {at.b.gear[i!]}ª ·{' '}
+                    {Math.round(at.b.throttle[i!])}%{at.b.brake[i!] ? ' · freio' : ''}
+                    {at.b.drs[i!] ? ' · DRS' : ''}
+                  </span>
+                )}
               </>
             ) : (
               <span className="muted">
@@ -211,8 +242,9 @@ export default function TelemetryPanel({ path, meta, results, laps, focus, onFoc
             onHover={setHover}
           />
           <p className="foot">
-            Voltas alinhadas por distância a cada 5 m. A diferença é o tempo acumulado de B menos o de A no mesmo ponto
-            da pista. Dados do carro a ~4 Hz.
+            {driverB
+              ? 'Voltas alinhadas por distância a cada 5 m. A diferença é o tempo acumulado de B menos o de A no mesmo ponto da pista. Dados do carro a ~4 Hz.'
+              : 'Canais da volta por distância, a cada 5 m. Dados do carro a ~4 Hz.'}
           </p>
         </>
       )}
@@ -241,6 +273,7 @@ function LapPicker({
   laps,
   results,
   available,
+  noneLabel,
 }: {
   tag: string
   color: string
@@ -251,6 +284,8 @@ function LapPicker({
   laps: Lap[]
   results: DriverResult[]
   available: string[]
+  /** Com isto, o seletor ganha a opção de não escolher piloto (valor vazio). */
+  noneLabel?: string
 }) {
   const drivers = [...results]
     .filter((r) => available.includes(r.driver))
@@ -266,13 +301,20 @@ function LapPicker({
         {tag}
       </span>
       <select value={driver ?? ''} aria-label={`Piloto ${tag}`} onChange={(e) => onDriver(e.target.value)}>
+        {noneLabel && <option value="">{noneLabel}</option>}
         {drivers.map((r) => (
           <option key={r.driver} value={r.driver}>
             {r.driver} · {r.fullName}
           </option>
         ))}
       </select>
-      <select value={lap ?? ''} aria-label={`Volta ${tag}`} onChange={(e) => onLap(Number(e.target.value))}>
+      <select
+        value={lap ?? ''}
+        aria-label={`Volta ${tag}`}
+        onChange={(e) => onLap(Number(e.target.value))}
+        disabled={!driver}
+        hidden={!driver}
+      >
         {driverLaps.map((l) => (
           <option key={l.lap} value={l.lap!}>
             V{l.lap} · {formatLapTime(l.lapTime)} · {COMPOUND_LETTER[l.compound ?? ''] ?? '?'}
