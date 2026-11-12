@@ -90,6 +90,8 @@ Outros modos: `python server.py live` força o ao vivo, e `python server.py repl
 
 O servidor escuta apenas em `127.0.0.1:8000`. Não o exponha na internet: ele usa a sua assinatura F1 TV, e o feed é só para uso pessoal.
 
+Pelo navegador, só o site local (`localhost`) e o site publicado (https://apexview-peach.vercel.app) conseguem conectar no servidor; qualquer outro site é recusado. Se você publicar o site em outro endereço, libere-o com `python server.py --allow-origin https://seu-site` ou com a variável `APEXVIEW_ALLOWED_ORIGINS`.
+
 ### Testes
 ```bash
 cd web && npm test               # lógica do site (web/src/lib)
@@ -102,6 +104,7 @@ cd live && pytest                # modo ao vivo
 O site é estático (o build do `web/` mais os arquivos de `data/`) e fica na **Vercel**, no plano gratuito. O projeto `apexview` está ligado a este repositório, com `web/` como pasta raiz.
 - Todo push na branch `main` publica uma nova versão em https://apexview-peach.vercel.app.
 - O cache está configurado em `web/vercel.json`: os arquivos do build ficam em cache por 1 ano, e os dados por 5 minutos.
+- O mesmo arquivo define os cabeçalhos de segurança do site, incluindo a política de conteúdo (CSP): o site só carrega scripts próprios, as fontes do Google Fonts e conecta no backend local em `ws://127.0.0.1:8000`. Se mudar a porta do backend (`VITE_LIVE_URL`) ou adicionar outro serviço externo, ajuste o `connect-src` da CSP.
 
 ## Estrutura
 
