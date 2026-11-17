@@ -44,8 +44,57 @@ export function routeHref(route: Route): string {
   }
 }
 
+/** Guarda o que a aba "Sessões" precisa lembrar (por aba do navegador; sobrevive a recarregar). */
+export interface KeyValueStore {
+  getItem(key: string): string | null
+  setItem(key: string, value: string): void
+}
+
+const LAST_SESSION_KEY = 'apexview:last-session'
+const SESSION_PATH = /^\d{4}\/[\w.-]+\/[\w.-]+$/
+
+function browserStore(): KeyValueStore | null {
+  try {
+    return window.sessionStorage
+  } catch {
+    return null
+  }
+}
+
+let lastSession: string | null = null
+
+/** Lembra a sessão aberta, para a aba "Sessões" voltar a ela depois de visitar outra tela. */
+export function rememberSession(route: Route, store: KeyValueStore | null = browserStore()): void {
+  if (route.view !== 'session' || !route.path || !SESSION_PATH.test(route.path)) return
+  lastSession = route.path
+  try {
+    store?.setItem(LAST_SESSION_KEY, route.path)
+  } catch {
+    // armazenamento bloqueado: fica só na memória
+  }
+}
+
+/** Última sessão aberta, se ainda existir entre as exportadas (`known`); senão null (a mais recente). */
+export function lastSessionPath(known: (path: string) => boolean, store: KeyValueStore | null = browserStore()): string | null {
+  let path = lastSession
+  if (!path) {
+    try {
+      path = store?.getItem(LAST_SESSION_KEY) ?? null
+    } catch {
+      path = null
+    }
+  }
+  return path && SESSION_PATH.test(path) && known(path) ? path : null
+}
+
+/** Só para testes: esquece a sessão guardada na memória. */
+export function forgetSession(): void {
+  lastSession = null
+}
+
 export function useRoute(): Route {
   const [route, setRoute] = useState(() => parseRoute(window.location.hash))
+  useEffect(() => rememberSession(route), [route])
   useEffect(() => {
     const onChange = () => {
       setRoute(parseRoute(window.location.hash))

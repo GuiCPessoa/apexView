@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import logoIcon from './assets/logo-icon.png'
 import { loadIndex } from './lib/data'
-import { routeHref, useAsync, useRoute, type Route } from './lib/route'
+import { lastSessionPath, routeHref, useAsync, useRoute, type Route } from './lib/route'
 
 // Cada tela é um pedaço separado do pacote: a primeira visita só baixa e executa a tela aberta.
 const views = {
@@ -35,9 +35,12 @@ const TABS: { view: Route['view']; label: string }[] = [
   { view: 'live', label: 'Ao vivo' },
 ]
 
-/** Destino de cada aba do topo (classificação e calendário mantêm o ano escolhido). */
-function tabRoute(view: Route['view'], route: Route, year: number | null): Route {
-  if (view === 'session') return { view: 'session', path: null }
+/**
+ * Destino de cada aba do topo: classificação e calendário mantêm o ano escolhido,
+ * e "Sessões" volta à última sessão aberta (`session`).
+ */
+function tabRoute(view: Route['view'], route: Route, year: number | null, session: string | null): Route {
+  if (view === 'session') return { view: 'session', path: route.view === 'session' ? route.path : session }
   if (view === 'live') return { view: 'live' }
   return { view, year: route.view === 'standings' || route.view === 'calendar' ? year : null }
 }
@@ -50,6 +53,8 @@ export default function App() {
   const seasons = index?.seasons ?? []
   const latestYear = seasons.length ? seasons[seasons.length - 1].year : null
   const year = route.view === 'standings' || route.view === 'calendar' ? (route.year ?? latestYear) : latestYear
+  // lido a cada troca de rota: o useRoute guarda a sessão aberta logo após renderizar
+  const lastSession = index ? lastSessionPath((p) => index.sessions.some((s) => s.path === p)) : null
 
   return (
     <>
@@ -65,7 +70,7 @@ export default function App() {
             {TABS.map((t) => (
               <a
                 key={t.view}
-                href={routeHref(tabRoute(t.view, route, year))}
+                href={routeHref(tabRoute(t.view, route, year, lastSession))}
                 className={route.view === t.view ? 'active' : undefined}
                 aria-current={route.view === t.view ? 'page' : undefined}
               >
