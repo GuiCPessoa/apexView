@@ -7,8 +7,10 @@ Se o formato ou a biblioteca mudarem, o ajuste fica concentrado aqui.
 - `download_archive()`: baixa o feed bruto de uma sessão passada (arquivo "static"),
   usado para simular uma sessão ao vivo fora do fim de semana de GP.
 
-Autenticação: o feed exige assinatura F1 TV. Reaproveita o token que o FastF1 guarda no
-login do pipeline (ou o do próprio LiveF1). Nunca lê nem grava usuário e senha.
+Autenticação: o feed exige assinatura F1 TV. Usa o token que o FastF1 guarda (o mesmo do
+pipeline) ou o do próprio LiveF1. `sign_in()` faz o login pela página do backend com o fluxo
+do LiveF1 (o mesmo do FastF1) e grava o token no arquivo do FastF1: o e-mail e a senha só passam pela memória a caminho da F1 e nunca são
+gravados nem registrados no log; fica guardado só o token, que vence em alguns dias.
 """
 
 from __future__ import annotations
@@ -55,8 +57,15 @@ MAX_RECONNECT_DELAY_S = 30
 TOKEN_MARGIN_S = 300  # token que vence em menos de 5 min conta como vencido
 
 
+TOKEN_MISSING = 'Conta F1 TV desconectada. Entre com a sua conta pelo botão "Entrar com a F1 TV", na aba Ao vivo.'
+
+
 class TokenError(RuntimeError):
     """Sem token F1 TV válido."""
+
+
+class SignInError(RuntimeError):
+    """Login recusado ou impossível; a mensagem é para o usuário."""
 
 
 @dataclass(frozen=True)
@@ -93,7 +102,7 @@ def load_token() -> tuple[str, float]:
     """Token F1 TV válido (valor, vencimento). Tenta o do FastF1 e depois o do LiveF1."""
     candidates = [
         (_fastf1_token_file(), "value"),
-        (Path(os.environ.get("LIVEF1_TOKEN_PATH", Path.home() / ".livef1" / "f1tv_auth_token.json")), "token"),
+        (_livef1_token_file(), "token"),
     ]
     for path, key in candidates:
         try:
@@ -103,14 +112,88 @@ def load_token() -> tuple[str, float]:
         exp = _jwt_exp(value)
         if exp and exp - TOKEN_MARGIN_S > time.time():
             return value, exp
-    raise TokenError(
-        "Nenhum token F1 TV válido. Faça o login do FastF1 de novo (veja INICIO.md, seção 7) e tente outra vez."
-    )
+    raise TokenError(TOKEN_MISSING)
+
+
+def token_status() -> dict:
+    """Estado da conta para o site: conectada (token válido) e até quando."""
+    try:
+        _, exp = load_token()
+    except TokenError:
+        return {"connected": False, "expires": None}
+    return {"connected": True, "expires": exp}
 
 
 def auth_headers() -> dict:
     value, _ = load_token()
     return {"Authorization": f"Bearer {value}", "User-Agent": USER_AGENT}
+
+
+# ---------- Login da conta F1 TV ----------
+
+
+def _livef1_token_file() -> Path:
+    return Path(os.environ.get("LIVEF1_TOKEN_PATH", Path.home() / ".livef1" / "f1tv_auth_token.json"))
+
+
+def _f1_login(email: str, password: str) -> tuple[str, float]:
+    """Login OAuth da conta F1 pelo LiveF1 (o mesmo fluxo do FastF1). Devolve (token, vencimento).
+
+    `save_token=False`: o LiveF1 não grava nada; com e-mail e senha passados, ele também não
+    toca no .env. Quem guarda o token é `_store_token`.
+    """
+    from livef1.auth import login  # isolado aqui
+
+    token = login(email, password, force=True, save_token=False)
+    return token.value, token.expires_at
+
+
+def _store_token(value: str, expires_at: float) -> None:
+    """Grava o token no arquivo do FastF1 (formato dele, só o usuário lê): serve ao backend e ao pipeline."""
+    path = _fastf1_token_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.chmod(path, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump({"version": 1, "value": value, "expires_at": expires_at}, f)
+
+
+def sign_in_message(reason: str) -> str:
+    """Traduz o motivo da recusa (texto do LiveF1 ou da F1) numa mensagem para o usuário."""
+    text = reason.lower()
+    if "subscription" in text:
+        return "Esta conta não tem assinatura F1 TV ativa. O ao vivo precisa de uma assinatura."
+    if "429" in text or "too many" in text:
+        return "A F1 recusou por tentativas demais. Espere alguns minutos e tente de novo."
+    if any(k in text for k in ("connection", "timeout", "timed out", "ssl", "name resolution")):
+        return "Não deu para falar com a F1. Confira a internet e tente de novo."
+    if any(k in text for k in ("password", "credential", "invalid", "incorrect", "username", "http 401")):
+        return "E-mail ou senha incorretos. Confira os dados da conta F1 TV e tente de novo."
+    return (
+        f"A F1 não concluiu o login ({reason}). Se ela pediu uma verificação extra, "
+        "entre pelo terminal, como explica o README."
+    )
+
+
+def sign_in(email: str, password: str) -> float:
+    """Entra na conta F1 TV e guarda só o token. Devolve o vencimento (epoch). Erros: SignInError."""
+    from livef1.utils.exceptions import AuthenticationError
+
+    try:
+        value, expires_at = _f1_login(email, password)
+    except AuthenticationError as exc:
+        raise SignInError(sign_in_message(str(exc))) from None
+    try:
+        _store_token(value, expires_at)
+    except OSError as exc:
+        raise SignInError(f"O login deu certo, mas não deu para guardar o acesso ({exc}).") from None
+    return expires_at
+
+
+def sign_out() -> None:
+    """Desconecta este computador: apaga os tokens guardados (o do FastF1 e o do LiveF1)."""
+    for path in (_fastf1_token_file(), _livef1_token_file()):
+        path.unlink(missing_ok=True)
 
 
 # ---------- Decodificação ----------

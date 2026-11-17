@@ -107,7 +107,7 @@ No cartão **Telemetria**, escolha o piloto **A** e o piloto **B** e a volta de 
 
 Durante os treinos, a classificação e a corrida, o apexView mostra a sessão em tempo real: mapa com os carros, torre de tempos, telemetria, clima e direção de prova. Fora dos fins de semana de GP, ele simula qualquer sessão desde 2018 como se fosse ao vivo.
 
-Ele roda **no seu computador**, porque usa a sua assinatura **F1 TV**. Siga primeiro [Rodar no seu computador](#-rodar-no-seu-computador) para ter o login, depois:
+Ele roda **no seu computador**, porque usa a sua assinatura **F1 TV**. Com o [projeto baixado](#-rodar-no-seu-computador), ligue o backend:
 
 ```bash
 cd live
@@ -118,6 +118,7 @@ python server.py
 ```
 
 Deixe o terminal aberto e vá à aba **Ao vivo** do site (o publicado ou o local).
+- **Entre com a sua conta F1 TV:** clique em **Entrar com a F1 TV** e use o e-mail e a senha da assinatura, na página que abre. A página é do backend no seu computador: a senha vai direto para a F1 e não fica salva. O acesso vale alguns dias; o bloco **Conta F1 TV** mostra até quando e avisa quando for hora de renovar.
 - **No horário de uma sessão**, o ao vivo liga sozinho e grava o feed em `live/recordings/`. Ajuste o **Atraso** para sincronizar com a TV.
 - **Fora das sessões**, use **Trocar sessão** para escolher outra. As que ainda não foram baixadas chegam em cerca de 1 minuto. Dá para pausar, mudar a velocidade e pular.
 - Na **Telemetria ao vivo**, escolha **Um piloto** ou **Comparar dois** e clique na torre para escolher quem acompanhar.
@@ -127,6 +128,7 @@ Deixe o terminal aberto e vá à aba **Ao vivo** do site (o publicado ou o local
 
 - `python server.py live` força o ao vivo, e `python server.py replay [ARQUIVO]` só simula uma gravação.
 - O servidor escuta apenas em `127.0.0.1:8000`. Não o exponha na internet: ele usa a sua assinatura F1 TV, e o feed é só para uso pessoal.
+- A página de login só aceita pedidos dela mesma e bloqueia por 10 minutos depois de 5 senhas erradas seguidas. Se a F1 pedir uma verificação que a página não consegue fazer, entre pelo terminal: rode um export do pipeline (o FastF1 pede e-mail e senha) e o backend passa a usar esse acesso.
 - Pelo navegador, só o site local (`localhost`) e o site publicado conseguem conectar; qualquer outro site é recusado. Se publicar o site em outro endereço, libere-o com `python server.py --allow-origin https://seu-site` ou com a variável `APEXVIEW_ALLOWED_ORIGINS`.
 - Os horários das sessões vêm de `data/{ano}/calendar.json`, então mantenha o calendário exportado.
 
@@ -163,7 +165,7 @@ python export_standings.py 2026  # calendário e classificação, sem login
 | `python export_season.py 2024 2025 2026` | Todas as corridas das temporadas | ✅ |
 
 > [!TIP]
-> **Login F1 TV:** na primeira vez, o FastF1 pede o e-mail e a senha da sua conta F1 TV no terminal. O token fica fora do repositório e vale por alguns dias; quando vencer, ele pede de novo. Comece com uma ou duas corridas antes de exportar uma temporada inteira: o FastF1 guarda um cache em `pipeline/cache/` e as consultas ao Jolpica respeitam o limite de uso.
+> **Login F1 TV:** se o backend do ao vivo estiver ligado, entre pela aba **Ao vivo** do site: o mesmo acesso vale para o pipeline. Sem ele, na primeira vez o FastF1 pede o e-mail e a senha da sua conta F1 TV no terminal. O token fica fora do repositório e vale por alguns dias; quando vencer, ele pede de novo. Comece com uma ou duas corridas antes de exportar uma temporada inteira: o FastF1 guarda um cache em `pipeline/cache/` e as consultas ao Jolpica respeitam o limite de uso.
 
 Depois de exportar, faça commit e push de `data/`: o site publicado se atualiza sozinho.
 

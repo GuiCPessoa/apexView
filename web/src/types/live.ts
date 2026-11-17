@@ -51,6 +51,12 @@ export interface LiveScheduled {
   start: string // ISO UTC
 }
 
+/** Conta F1 TV conectada no backend: token válido e quando vence (epoch UTC em s). */
+export interface LiveAccount {
+  connected: boolean
+  expires: number | null
+}
+
 export interface LiveSource {
   mode: 'live' | 'replay' | 'idle'
   error: string | null
@@ -60,6 +66,7 @@ export interface LiveSource {
   loading?: { path: string; label: string; done: number; total: number } | null // baixando do arquivo
   liveSession?: LiveScheduled | null
   nextLive?: LiveScheduled | null
+  account?: LiveAccount // conta F1 TV do backend (ausente em backends antigos)
   recording?: string | null
   speed?: number
   paused?: boolean

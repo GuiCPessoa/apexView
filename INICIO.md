@@ -115,7 +115,7 @@ Temporadas inteiras (calendário, classificação e todas as corridas já disput
 
 > **Versão atual do script:** o código acima é só o ponto de partida. O script real em `pipeline/export_session.py` também grava `meta.json` e `data/index.json`, usa a pasta `{rodada}-{local}` (ex.: `2024/16-monza/R`) e converte `NaN` em `null`. O formato completo está em `docs/data-format.md`.
 
-> **Login F1 TV:** na primeira execução o FastF1 pede o e-mail e a senha da conta F1 TV no terminal. Rode o script você mesmo num terminal interativo para isso. O token fica em `~/Library/Application Support/fastf1/f1auth_token.json` (fora do repositório) e é reutilizado até expirar. Depois disso é preciso entrar de novo. Nunca coloque `F1_USERNAME` ou `F1_PASSWORD` em arquivos versionados.
+> **Login F1 TV:** se o backend do ao vivo estiver ligado, entre pelo botão **Entrar com a F1 TV** da aba Ao vivo: o token vale também para o pipeline. Sem isso, na primeira execução o FastF1 pede o e-mail e a senha da conta F1 TV no terminal. Rode o script você mesmo num terminal interativo para isso. O token fica em `~/Library/Application Support/fastf1/f1auth_token.json` (fora do repositório) e é reutilizado até expirar. Depois disso é preciso entrar de novo. Nunca coloque `F1_USERNAME` ou `F1_PASSWORD` em arquivos versionados.
 
 ### 4.3 Frontend
 ```bash
@@ -137,7 +137,7 @@ Com o backend rodando e o `npm run dev` aberto, use a aba **Ao vivo** do site. O
 - **Modo automático (padrão):** no horário de cada sessão do fim de semana de GP (de 15 min antes até 1 h depois do fim previsto), o site mostra o **ao vivo**, sem escolha, e o feed é gravado em `live/recordings/`. Os horários vêm de `data/{ano}/calendar.json`: mantenha o calendário exportado (`python export_standings.py 2026` no pipeline). Fora das sessões, o site simula uma gravação e o botão **Trocar sessão** lista as sessões de qualquer ano desde 2018: as já baixadas abrem na hora; as outras (marcadas com ↓) o servidor baixa do arquivo da F1 (~1 min) e guarda em `live/recordings/`.
 - `python server.py live` força o ao vivo; `python server.py replay [ARQUIVO] [--speed 4] [--start 00:50:00]` só simula (sem ligar o ao vivo sozinho).
 
-- **Login:** usa o mesmo token F1 TV do pipeline (o do FastF1). Ele vence em poucos dias: antes do GP, rode um export qualquer do pipeline para renovar o login. O backend nunca lê nem grava usuário e senha.
+- **Login:** pelo próprio site. Com o backend ligado, a aba **Ao vivo** mostra o estado da conta e o botão **Entrar com a F1 TV**, que abre `http://127.0.0.1:8000/login` (página servida pelo backend). O backend entra na F1 com o fluxo OAuth do LiveF1 e grava só o token no mesmo arquivo do FastF1, então o login serve também ao pipeline (e o do pipeline serve ao backend). O token vence em poucos dias; com menos de 24 h, a aba sugere renovar. E-mail e senha nunca são gravados nem registrados.
 - **Simulação:** pausa, velocidade e linha do tempo na própria página. Para baixar uma sessão pelo terminal: `python record_archive.py 2026 20 R`.
 - **Gravações** ficam em `live/recordings/` (fora do git): são dados do feed oficial, só para uso pessoal.
 - Todo acesso ao live timing está em `live/feed.py`. Se o feed mudar, o ajuste fica ali.

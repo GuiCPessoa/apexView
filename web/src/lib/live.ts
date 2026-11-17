@@ -1,10 +1,53 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { LiveCatalog, LiveSnapshot } from '../types/live'
+import type { LiveAccount, LiveCatalog, LiveSnapshot } from '../types/live'
 
 /** Endereço do backend local. Pode ser trocado com VITE_LIVE_URL no .env.local do web/. */
 export const LIVE_URL: string = import.meta.env.VITE_LIVE_URL ?? 'ws://127.0.0.1:8000/ws'
 
 const RECONNECT_MS = 2000
+
+// ---------- Conta F1 TV ----------
+
+/** Com menos que isto até vencer, a aba Ao vivo sugere renovar o login. */
+export const EXPIRING_SOON_S = 24 * 3600
+
+export type AccountKind = 'ok' | 'expiring' | 'off'
+
+export function accountKind(account: LiveAccount, nowSec: number): AccountKind {
+  if (!account.connected || account.expires == null || account.expires <= nowSec) return 'off'
+  return account.expires - nowSec < EXPIRING_SOON_S ? 'expiring' : 'ok'
+}
+
+/** Tempo até vencer, curto: "5 h", "40 min". */
+export function formatRemaining(seconds: number): string {
+  if (seconds >= 3600) return `${Math.floor(seconds / 3600)} h`
+  return `${Math.max(1, Math.floor(seconds / 60))} min`
+}
+
+/** "20/11 às 21:14" no fuso de quem vê. */
+export function formatExpiry(epochSec: number): string {
+  const d = new Date(epochSec * 1000)
+  const two = (n: number) => String(n).padStart(2, '0')
+  return `${two(d.getDate())}/${two(d.getMonth() + 1)} às ${two(d.getHours())}:${two(d.getMinutes())}`
+}
+
+/**
+ * Página de login servida pelo backend (mesmo endereço do WebSocket, em http).
+ * `from` é a origem do site, para o botão "Voltar ao apexView" da página.
+ */
+export function loginUrl(liveUrl: string, from?: string): string | null {
+  try {
+    const url = new URL(liveUrl)
+    if (url.protocol !== 'ws:' && url.protocol !== 'wss:') return null
+    url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
+    url.pathname = '/login'
+    url.search = from ? `?from=${encodeURIComponent(from)}` : ''
+    url.hash = ''
+    return url.toString()
+  } catch {
+    return null
+  }
+}
 
 /**
  * Guarda os snapshots recebidos para mostrá-los com atraso (sincronizar com a TV,

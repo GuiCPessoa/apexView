@@ -11,7 +11,8 @@ exportado pelo pipeline) o site mostra o ao vivo, sem escolha. Fora disso, mostr
 e o site pode escolher qualquer sessão: as já gravadas ou as do arquivo da F1 (baixadas na hora).
 
 O site (npm run dev) conecta em ws://127.0.0.1:8000/ws. O servidor só escuta na própria
-máquina (127.0.0.1); não exponha à internet. Pelo navegador, só o site local e o site
+máquina (127.0.0.1); não exponha à internet. A conta F1 TV é conectada pela página
+http://127.0.0.1:8000/login, aberta pelo botão "Entrar com a F1 TV" da aba Ao vivo. Pelo navegador, só o site local e o site
 publicado podem conectar (veja ALLOWED_ORIGINS); outros endereços entram com --allow-origin
 ou com a variável APEXVIEW_ALLOWED_ORIGINS (separados por vírgula).
 """
@@ -22,6 +23,7 @@ import argparse
 import asyncio
 import contextlib
 import copy
+import html
 import json
 import logging
 import os
@@ -33,7 +35,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 import feed
@@ -44,6 +47,7 @@ from state import LiveState, parse_duration
 log = logging.getLogger("live")
 
 TICK_S = 0.25  # 4 snapshots por segundo
+LOGIN_RETRY_S = 5  # ao vivo sem conta conectada: tenta de novo a cada 5 s
 SPEEDS = (1, 2, 4, 8, 16, 32)
 SCHEDULE_CHECK_S = 30  # modo automático: confere o calendário a cada 30 s
 INDEX_TTL_S = 600  # lista de sessões do ano corrente no arquivo da F1: relê a cada 10 min
@@ -62,6 +66,26 @@ ALLOWED_HOSTS = ["127.0.0.1", "localhost"]  # cabeçalho Host aceito (barra DNS 
 MAX_CLIENTS = 16
 WS_MAX_MESSAGE_BYTES = 64 * 1024  # os comandos do site são JSON de poucos bytes
 
+# ---------- Login da conta F1 TV ----------
+STATIC_DIR = Path(__file__).parent / "static"
+LOGIN_MAX_FAILURES = 5  # tentativas erradas seguidas...
+LOGIN_WINDOW_S = 600  # ...em 10 minutos bloqueiam novas tentativas até a mais antiga sair da janela
+LOGIN_MAX_BODY = 2048
+ACCOUNT_TTL_S = 5  # o estado da conta (lido do arquivo do token) vai no snapshot; relê a cada 5 s
+# Página de login: só scripts e estilos do próprio servidor (mais as fontes do Google), nada de
+# moldura em outro site (clickjacking) e o formulário só fala com o próprio servidor.
+LOGIN_CSP = (
+    "default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; "
+    "font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self'; "
+    "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+)
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store",
+}
+
 
 def allowed_origins(extra: list[str] | tuple[str, ...] = ()) -> frozenset[str]:
     """Origens liberadas além das locais: as padrão, as de APEXVIEW_ALLOWED_ORIGINS e as de --allow-origin."""
@@ -74,6 +98,58 @@ def origin_allowed(origin: str | None, allowed: frozenset[str]) -> bool:
     if origin is None:
         return True
     return bool(LOCAL_ORIGIN.match(origin)) or origin in allowed
+
+
+def same_origin(request: Request) -> bool:
+    """Pedido feito pela própria página do servidor? Barra outros sites (inclusive em localhost)
+    de mandar login ou logout pelo navegador do usuário."""
+    origin = request.headers.get("origin")
+    host = request.headers.get("host")
+    return bool(origin and host) and origin == f"http://{host}"
+
+
+def back_url(origin: str | None, allowed: frozenset[str]) -> str:
+    """Para onde o botão "Voltar ao apexView" leva: o site que abriu o login, se for liberado."""
+    if origin and origin_allowed(origin.rstrip("/"), allowed):
+        return f"{origin.rstrip('/')}/#/ao-vivo"
+    return f"{ALLOWED_ORIGINS[0]}/#/ao-vivo"
+
+
+class LoginGuard:
+    """Limita tentativas de login erradas (a F1 também bloqueia contas com tentativas demais)."""
+
+    def __init__(self, max_failures: int = LOGIN_MAX_FAILURES, window: float = LOGIN_WINDOW_S) -> None:
+        self.max_failures = max_failures
+        self.window = window
+        self.failures: list[float] = []
+        self.lock = asyncio.Lock()
+
+    def _prune(self, now: float) -> None:
+        self.failures = [t for t in self.failures if now - t < self.window]
+
+    def retry_after(self, now: float) -> float:
+        """0 se pode tentar; senão, quantos segundos faltam."""
+        self._prune(now)
+        if len(self.failures) < self.max_failures:
+            return 0.0
+        return self.window - (now - self.failures[0])
+
+    def failed(self, now: float) -> None:
+        self.failures.append(now)
+
+    def succeeded(self) -> None:
+        self.failures.clear()
+
+
+_account: dict = {"at": 0.0, "value": {"connected": False, "expires": None}}
+
+
+def account_status(refresh: bool = False) -> dict:
+    """Estado da conta F1 TV (conectada e até quando), relido do arquivo do token a cada 5 s."""
+    now = time.monotonic()
+    if refresh or now - _account["at"] >= ACCOUNT_TTL_S:
+        _account.update(at=now, value=feed.token_status())
+    return _account["value"]
 
 
 class Hub:
@@ -128,6 +204,7 @@ class Hub:
             "loading": self.loading,
             "liveSession": self.live_session.as_dict() if self.live_session and self.mode == "live" else None,
             "nextLive": self.next_live.as_dict() if self.auto and self.next_live else None,
+            "account": account_status(),
         }
         if self.mode == "replay":
             info.update({
@@ -161,16 +238,23 @@ async def run_live(record: bool, label: str = "ao-vivo") -> None:
     rec = recording.Recorder(recording.new_path(label), {"source": "live"}) if record else None
     if rec:
         log.info("Gravando em %s", rec.path)
+    warned = False
     try:
-        async for msg in feed.stream_live():
-            hub.error = None
-            if rec:
-                rec.write(msg)
-            hub.state.apply(msg)
-            hub.set_clock(max(hub.now(), msg.time))
-    except feed.TokenError as exc:
-        hub.error = str(exc)
-        log.error("%s", exc)
+        while True:
+            try:
+                async for msg in feed.stream_live():
+                    hub.error = None
+                    if rec:
+                        rec.write(msg)
+                    hub.state.apply(msg)
+                    hub.set_clock(max(hub.now(), msg.time))
+            except feed.TokenError as exc:
+                # sem conta conectada: espera o login pela página e tenta de novo sozinho
+                hub.error = str(exc)
+                if not warned:
+                    log.error("%s Aguardando o login em /login.", exc)
+                    warned = True
+                await asyncio.sleep(LOGIN_RETRY_S)
     finally:
         if rec:
             rec.close()
@@ -532,6 +616,83 @@ def create_app(args: argparse.Namespace) -> FastAPI:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
     origins = allowed_origins(getattr(args, "allow_origin", None) or ())
 
+    guard = LoginGuard()
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        for key, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(key, value)
+        return response
+
+    login_page = (STATIC_DIR / "login.html").read_text(encoding="utf-8")
+
+    @app.get("/login", response_class=HTMLResponse)
+    def login(request: Request) -> HTMLResponse:
+        back = back_url(request.query_params.get("from"), origins)
+        page = login_page.replace("__BACK_URL__", html.escape(back, quote=True))
+        return HTMLResponse(page, headers={"Content-Security-Policy": LOGIN_CSP})
+
+    def static_file(name: str, media: str):
+        # rota sem parâmetros: o caminho é fixo, nada vem do pedido
+        def serve() -> FileResponse:
+            return FileResponse(STATIC_DIR / name, media_type=media)
+
+        app.add_api_route(f"/{name}", serve, methods=["GET"], include_in_schema=False)
+
+    for name, media in (("login.js", "text/javascript"), ("login.css", "text/css"), ("logo-icon.png", "image/png")):
+        static_file(name, media)
+
+    @app.get("/api/account")
+    def account() -> dict:
+        return account_status(refresh=True)
+
+    @app.post("/api/login")
+    async def sign_in(request: Request) -> JSONResponse:
+        if not same_origin(request):
+            return JSONResponse({"error": "Pedido recusado: use a página de login do apexView."}, status_code=403)
+        body = await request.body()
+        try:
+            data = json.loads(body) if len(body) <= LOGIN_MAX_BODY else None
+        except ValueError:
+            data = None
+        email = data.get("email") if isinstance(data, dict) else None
+        password = data.get("password") if isinstance(data, dict) else None
+        if not (isinstance(email, str) and isinstance(password, str) and email.strip() and password):
+            return JSONResponse({"error": "Preencha o e-mail e a senha."}, status_code=400)
+        if guard.lock.locked():
+            return JSONResponse({"error": "Já tem um login em andamento. Espere terminar."}, status_code=409)
+        async with guard.lock:
+            wait = guard.retry_after(time.time())
+            if wait > 0:
+                minutes = max(1, round(wait / 60))
+                return JSONResponse(
+                    {"error": f"Muitas tentativas erradas seguidas. Espere {minutes} min e tente de novo."},
+                    status_code=429,
+                )
+            try:
+                expires = await asyncio.to_thread(feed.sign_in, email.strip(), password)
+            except feed.SignInError as exc:
+                guard.failed(time.time())
+                log.warning("Login F1 TV recusado: %s", exc)  # nunca registra e-mail nem senha
+                return JSONResponse({"error": str(exc)}, status_code=401)
+            except Exception:
+                log.exception("Falha inesperada no login F1 TV")
+                return JSONResponse({"error": "Falha inesperada no login. Veja o terminal do backend."}, status_code=500)
+        guard.succeeded()
+        if hub.error == feed.TOKEN_MISSING:
+            hub.error = None
+        log.info("Conta F1 TV conectada até %s", time.strftime("%d/%m %H:%M", time.localtime(expires)))
+        return JSONResponse(account_status(refresh=True))
+
+    @app.post("/api/logout")
+    def sign_out(request: Request) -> JSONResponse:
+        if not same_origin(request):
+            return JSONResponse({"error": "Pedido recusado: use a página de login do apexView."}, status_code=403)
+        feed.sign_out()
+        log.info("Conta F1 TV desconectada")
+        return JSONResponse(account_status(refresh=True))
+
     @app.get("/api/status")
     def status() -> dict:
         snap = hub.state.snapshot(hub.now())
@@ -588,12 +749,11 @@ def main() -> None:
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
-    if args.mode == "live":
-        try:
-            _, exp = feed.load_token()
-            log.info("Token F1 TV válido até %s", time.strftime("%d/%m %H:%M", time.localtime(exp)))
-        except feed.TokenError as exc:
-            raise SystemExit(str(exc)) from None
+    account = feed.token_status()
+    if account["connected"]:
+        log.info("Conta F1 TV conectada até %s", time.strftime("%d/%m %H:%M", time.localtime(account["expires"])))
+    else:
+        log.warning("Conta F1 TV desconectada: entre em http://127.0.0.1:%s/login", args.port)
     uvicorn.run(create_app(args), host="127.0.0.1", port=args.port, log_level="warning", ws_max_size=WS_MAX_MESSAGE_BYTES)
 
 

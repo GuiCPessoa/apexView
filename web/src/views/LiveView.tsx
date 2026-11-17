@@ -1,15 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Card from '../components/Card'
 import RaceControlFeed from '../components/RaceControlFeed'
 import WeatherPanel from '../components/WeatherPanel'
 import { formatLapTime, loadTrack } from '../lib/data'
 import { dimmed, toggleFocus } from '../lib/focus'
-import { LIVE_URL, formatLiveGap, sourceKey, tracePath, useLiveFeed, type LiveStatus } from '../lib/live'
+import {
+  LIVE_URL,
+  accountKind,
+  formatExpiry,
+  formatLiveGap,
+  formatRemaining,
+  loginUrl,
+  sourceKey,
+  tracePath,
+  useLiveFeed,
+  type LiveStatus,
+} from '../lib/live'
 import { similarColors } from '../lib/telemetry'
 import { TRACK_STATUS_LABEL, formatClock, makeProjection } from '../lib/replay'
 import { COMPOUND } from '../lib/tyres'
 import type { DataIndex, RaceControlMessage, Track } from '../types/data'
-import type { LiveCatalog, LiveDriver, LiveScheduled, LiveSnapshot, LiveTimed } from '../types/live'
+import type { LiveAccount, LiveCatalog, LiveDriver, LiveScheduled, LiveSnapshot, LiveTimed } from '../types/live'
 
 const DELAYS = [0, 5, 10, 15, 20, 30, 45, 60]
 
@@ -22,6 +33,22 @@ const SPEEDS = [1, 4, 16, 32]
 
 const START_HELP = `cd live && source .venv/bin/activate
 python server.py`
+
+// mesmo texto de feed.TOKEN_MISSING: com a faixa "Conecte sua conta" na tela, o aviso de erro sobra
+const TOKEN_MISSING_PREFIX = 'Conta F1 TV desconectada'
+
+/** Relógio de parede (epoch em s), atualizado a cada `everyMs`: vencimento da conta. */
+function useNow(everyMs: number): number {
+  const [now, setNow] = useState(() => Date.now() / 1000)
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now() / 1000), everyMs)
+    return () => clearInterval(id)
+  }, [everyMs])
+  return now
+}
+
+/** Página de login no backend; volta para este site (local ou publicado) ao terminar. */
+const LOGIN_URL = loginUrl(LIVE_URL, typeof window !== 'undefined' ? window.location.origin : undefined)
 
 const SESSION_NAME: Record<string, string> = {
   Race: 'Corrida',
@@ -41,6 +68,7 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
   const [gapMode, setGapMode] = useState<'gap' | 'interval'>('gap')
   const [choosing, setChoosing] = useState(false)
   const { status, snapshot, send, requestTraces, catalog, requestCatalog } = useLiveFeed(delay)
+  const now = useNow(30_000)
   const onToggle = useCallback((d: string) => setFocus((f) => toggleFocus(f, d)), [])
   const track = useExportedTrack(index, snapshot)
   // cores por piloto com identidade estável (o snapshot muda 4×/s; as cores, quase nunca):
@@ -59,6 +87,8 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
   const replay = s.source.mode === 'replay'
   const idle = s.source.mode === 'idle'
   const canChoose = s.source.canChoose ?? false
+  const account = s.source.account
+  const accountOff = account != null && accountKind(account, now) === 'off'
   const showChooser = canChoose && (choosing || idle)
   const choose = (path: string) => {
     send({ cmd: 'select', path })
@@ -67,7 +97,9 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
 
   return (
     <section className="live">
-      {s.source.error && <p className="notice error">{s.source.error}</p>}
+      {s.source.error && !(accountOff && s.source.error.startsWith(TOKEN_MISSING_PREFIX)) && (
+        <p className="notice error">{s.source.error}</p>
+      )}
       {s.source.loading && <DownloadNotice loading={s.source.loading} />}
       {status !== 'open' && <p className="notice warn">Conexão com o backend perdida; reconectando…</p>}
 
@@ -128,8 +160,11 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
             </select>
             <span className="stat-sub">para sincronizar com a TV</span>
           </div>
+          {account && <AccountStat account={account} now={now} />}
         </div>
       </div>
+
+      {accountOff && <AccountBanner />}
 
       {replay && <ReplayBar s={s} send={send} onChoose={canChoose ? () => setChoosing((c) => !c) : undefined} choosing={showChooser} />}
 
@@ -228,12 +263,59 @@ function Offline({ status }: { status: LiveStatus }) {
           <p>Num terminal, dentro da pasta do projeto:</p>
           <pre className="code">{START_HELP}</pre>
           <p className="muted">
-            O modo ao vivo usa o mesmo login F1 TV do pipeline. Se o token tiver vencido, refaça o login do FastF1 (veja o
-            INICIO.md).
+            Com o backend ligado, entre com a sua conta F1 TV pelo botão que aparece nesta aba. Não precisa de mais nada no
+            terminal.
           </p>
         </Card>
       </div>
     </section>
+  )
+}
+
+// ---------- Conta F1 TV ----------
+
+function LoginLink({ children, className }: { children: ReactNode; className?: string }) {
+  if (!LOGIN_URL) return null
+  return (
+    <a className={className} href={LOGIN_URL} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  )
+}
+
+/** Estado da conta no topo da aba: conectada, vencendo (renovar) ou desconectada (entrar). */
+function AccountStat({ account, now }: { account: LiveAccount; now: number }) {
+  const kind = accountKind(account, now)
+  const expires = account.expires ?? 0
+  return (
+    <div className={`stat acct acct-${kind}`}>
+      <span className="stat-label">Conta F1 TV</span>
+      <span className="stat-value">
+        <i className="acct-dot" aria-hidden="true" />
+        {kind === 'ok' ? 'Conectada' : kind === 'expiring' ? `Vence em ${formatRemaining(expires - now)}` : 'Desconectada'}
+      </span>
+      <span className="stat-sub">
+        {kind === 'ok' ? (
+          `até ${formatExpiry(expires)}`
+        ) : (
+          <LoginLink className="acct-link">{kind === 'expiring' ? 'Renovar agora ↗' : 'Entrar ↗'}</LoginLink>
+        )}
+      </span>
+    </div>
+  )
+}
+
+function AccountBanner() {
+  return (
+    <div className="account-banner" role="status">
+      <div>
+        <b>Conecte sua conta F1 TV</b>
+        <span>O ao vivo e o download de novas sessões precisam dela. As gravações que você já tem continuam funcionando.</span>
+      </div>
+      <LoginLink className="btn">
+        Entrar com a F1 TV <span aria-hidden="true">↗</span>
+      </LoginLink>
+    </div>
   )
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LiveSnapshot } from '../types/live'
-import { DelayBuffer, emptySticky, formatLiveGap, sourceKey, tracePath, withSticky } from './live'
+import { DelayBuffer, accountKind, emptySticky, formatExpiry, formatLiveGap, formatRemaining, loginUrl, sourceKey, tracePath, withSticky } from './live'
 
 describe('DelayBuffer', () => {
   it('devolve o valor de alguns segundos atrás', () => {
@@ -66,5 +66,35 @@ describe('sourceKey', () => {
     expect(sourceKey(snap('replay', '2026/a/'))).toBe(sourceKey(snap('replay', '2026/a/')))
     expect(sourceKey(snap('replay', '2026/a/'))).not.toBe(sourceKey(snap('replay', '2026/b/')))
     expect(sourceKey(snap('live', null))).not.toBe(sourceKey(snap('idle', null)))
+  })
+})
+
+describe('conta F1 TV', () => {
+  const now = 1_800_000_000
+
+  it('classifica a conta: conectada, vencendo em menos de 24 h ou desconectada', () => {
+    expect(accountKind({ connected: true, expires: now + 3 * 86400 }, now)).toBe('ok')
+    expect(accountKind({ connected: true, expires: now + 5 * 3600 }, now)).toBe('expiring')
+    expect(accountKind({ connected: true, expires: now - 1 }, now)).toBe('off')
+    expect(accountKind({ connected: true, expires: null }, now)).toBe('off')
+    expect(accountKind({ connected: false, expires: null }, now)).toBe('off')
+  })
+
+  it('escreve o tempo até vencer e a data de vencimento', () => {
+    expect(formatRemaining(5 * 3600 + 59 * 60)).toBe('5 h')
+    expect(formatRemaining(40 * 60 + 30)).toBe('40 min')
+    expect(formatRemaining(20)).toBe('1 min')
+    expect(formatExpiry(new Date(2026, 10, 20, 21, 14).getTime() / 1000)).toBe('20/11 às 21:14')
+    expect(formatExpiry(new Date(2026, 0, 5, 7, 3).getTime() / 1000)).toBe('05/01 às 07:03')
+  })
+
+  it('monta o endereço da página de login a partir do backend', () => {
+    expect(loginUrl('ws://127.0.0.1:8000/ws')).toBe('http://127.0.0.1:8000/login')
+    expect(loginUrl('ws://127.0.0.1:8000/ws', 'https://apexview-peach.vercel.app')).toBe(
+      'http://127.0.0.1:8000/login?from=https%3A%2F%2Fapexview-peach.vercel.app',
+    )
+    expect(loginUrl('wss://exemplo.dev/ws')).toBe('https://exemplo.dev/login')
+    expect(loginUrl('não é url')).toBeNull()
+    expect(loginUrl('http://127.0.0.1:8000/ws')).toBeNull()
   })
 })

@@ -2835,3 +2835,106 @@ pre.code {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- Ao vivo: conta F1 TV ---------- */
+
+.acct-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--up);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
+}
+
+.acct-expiring {
+  border-color: rgba(245, 196, 0, 0.45);
+}
+
+.acct-expiring .acct-dot {
+  background: #f5c400;
+  box-shadow: 0 0 0 3px rgba(245, 196, 0, 0.18);
+}
+
+.acct-off {
+  border-color: rgba(225, 6, 0, 0.55);
+}
+
+.acct-off .acct-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(225, 6, 0, 0.2);
+}
+
+.acct-link {
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  text-decoration: none;
+  white-space: nowrap;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  filter: brightness(1.08);
+}
+
+.btn:focus-visible,
+.acct-link:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.account-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(225, 6, 0, 0.55);
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(225, 6, 0, 0.16), rgba(225, 6, 0, 0.03));
+}
+
+.account-banner b {
+  display: block;
+  font-size: 16px;
+}
+
+.account-banner span {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.account-banner .btn {
+  margin-left: auto;
+}
+
+.account-banner .btn span {
+  color: inherit;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+@media (max-width: 640px) {
+  .account-banner .btn {
+    width: 100%;
+    margin-left: 0;
+  }
+}

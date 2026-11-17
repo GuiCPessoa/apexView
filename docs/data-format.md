@@ -323,6 +323,7 @@ O backend local (`live/server.py`) não grava arquivos em `data/`: ele manda **s
  "source": {"mode": "replay", "error": null, "auto": true, "canChoose": true,
    "selected": "2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/", "loading": null,
    "liveSession": null, "nextLive": {"label": "Las Vegas Grand Prix · Treino 1", "event": "Las Vegas Grand Prix", "code": "FP1", "start": "2026-11-20T00:30:00Z"},
+   "account": {"connected": true, "expires": 1795695240.0},
    "recording": "2026-20-r.jsonl.gz", "speed": 4, "paused": false, "elapsed": 6000.0, "duration": 9600.6}}
 ```
 
@@ -336,6 +337,18 @@ O backend local (`live/server.py`) não grava arquivos em `data/`: ele manda **s
 - `source.mode`: `"live"` (feed ao vivo), `"replay"` (simulação) ou `"idle"` (sem gravação, esperando a escolha). Na simulação o site pode mandar comandos pelo mesmo WebSocket: `{"cmd": "pause", "value": true}`, `{"cmd": "speed", "value": 16}` (1, 2, 4, 8, 16 ou 32) e `{"cmd": "seek", "value": 3600}` (segundos desde o início da gravação).
 - `source.auto`: o servidor está no modo automático (liga o ao vivo no horário das sessões do `calendar.json`). `nextLive` é a próxima sessão em que isso acontece e `liveSession`, a sessão do calendário durante o ao vivo.
 - `source.canChoose`: fora do ao vivo, o site pode trocar a sessão com `{"cmd": "select", "path": "2026/…_Grand_Prix/…_Qualifying/"}` (caminho do arquivo da F1). Se ainda não houver gravação dela, o servidor baixa e mostra o progresso em `loading` (`{"path", "label", "done", "total"}`, em tópicos); ao terminar, começa a simulação. `selected` é a sessão em simulação. Durante o ao vivo, `select` é ignorado.
+
+- `source.account`: conta F1 TV do backend. `connected` diz se há token válido (que vence em mais de 5 min) e `expires` é o vencimento (epoch UTC, s), ou `null`. É relido do arquivo do token a cada 5 s. Desconectada, a aba Ao vivo mostra o botão **Entrar com a F1 TV**; com menos de 24 h, sugere renovar. Sem conta, o ao vivo tenta de novo a cada 5 s e a simulação das gravações continua.
+
+#### Login da conta F1 TV
+
+Rotas HTTP do backend, só para a página de login (mesma origem; sem CORS):
+
+- `GET /login?from=ORIGEM`: página de login (`live/static/`). `from` é o site que abriu a página; se for liberado (o local ou o publicado), o botão "Voltar ao apexView" leva a ele. Responde com CSP restrita e sem moldura em outro site.
+- `GET /api/account`: `{"connected", "expires"}`, como em `source.account`.
+- `POST /api/login` com `{"email", "password"}` (JSON): entra na F1 com o fluxo OAuth do LiveF1 e grava só o token no arquivo do FastF1 (`f1auth_token.json`, permissão 600), que serve ao backend e ao pipeline. Responde `{"connected", "expires"}` ou `{"error"}` com 400 (faltam dados), 401 (recusado pela F1), 403 (`Origin` diferente da própria página), 409 (outro login em andamento) ou 429 (5 tentativas erradas em 10 min).
+- `POST /api/logout`: apaga os tokens guardados (o do FastF1 e o do LiveF1).
+- E-mail e senha nunca são gravados nem aparecem no log.
 
 #### Catálogo de sessões
 
