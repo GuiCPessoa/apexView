@@ -1,0 +1,15 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "presence": {
+      ".read": true,
+      "$browser": {
+        "$tab": {
+          ".write": "$browser.matches(/^[A-Za-z0-9_-]{20}$/) && $tab.matches(/^[A-Za-z0-9_-]{20}$/)",
+          ".validate": "newData.isBoolean() && newData.val() === true"
+        }
+      }
+    }
+  }
+}

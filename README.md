@@ -186,7 +186,8 @@ cd live && pytest                # modo ao vivo
 O site é estático (o build do `web/` mais os arquivos de `data/`) e fica na **Vercel**, no plano gratuito, com `web/` como pasta raiz.
 - Todo push na branch `main` publica uma nova versão em https://apexview-peach.vercel.app.
 - O cache está em `web/vercel.json`: os arquivos do build ficam em cache por 1 ano, e os dados por 5 minutos.
-- O mesmo arquivo define os cabeçalhos de segurança, incluindo a política de conteúdo (CSP): o site só carrega scripts próprios e as fontes do Google Fonts, e só conecta no backend local em `ws://127.0.0.1:8000`. Se mudar a porta do backend (`VITE_LIVE_URL`) ou adicionar outro serviço externo, ajuste o `connect-src` da CSP.
+- O mesmo arquivo define os cabeçalhos de segurança, incluindo a política de conteúdo (CSP): o site só carrega scripts próprios e as fontes do Google Fonts, e só conecta no backend local em `ws://127.0.0.1:8000` e no banco do contador de pessoas online (Firebase). Se mudar a porta do backend (`VITE_LIVE_URL`) ou adicionar outro serviço externo, ajuste o `connect-src` da CSP.
+- **Pessoas online:** o número na barra superior vem da presença do **Firebase Realtime Database** (projeto `apexView`, plano gratuito Spark). Cada aba aberta grava só um identificador aleatório, que o Firebase apaga quando ela fecha; várias abas do mesmo navegador contam uma vez. As regras do banco estão em `firebase/database.rules.json` (publique-as em *Realtime Database → Regras* no console do Firebase se mudarem). Para usar outro banco, defina `VITE_PRESENCE_DB_URL`; vazio desliga o contador.
 
 </details>
 
@@ -212,5 +213,6 @@ Guia completo de arquitetura, setup e roadmap: [`INICIO.md`](INICIO.md).
 - [FastF1](https://github.com/theOehrly/Fast-F1): sessões, voltas, telemetria, posições e clima.
 - [Jolpica-F1](https://github.com/jolpica/jolpica-f1): calendário, resultados e classificação.
 - [LiveF1](https://github.com/GoktugOcal/LiveF1) e o feed oficial de live timing da F1 (não documentado): modo ao vivo, só para uso pessoal.
+- [Firebase Realtime Database](https://firebase.google.com/docs/database) (plano gratuito): contador de pessoas online.
 
 <sub>Projeto pessoal, gratuito e não comercial, para estudo e diversão entre amigos. Não tem ligação com a Fórmula 1, a FIA ou as equipes. Os dados de corrida pertencem aos seus donos.</sub>

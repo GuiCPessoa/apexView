@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import logoIcon from './assets/logo-icon.png'
 import { loadIndex } from './lib/data'
+import { useOnlineCount } from './lib/presence'
 import { lastSessionPath, routeHref, useAsync, useRoute, type Route } from './lib/route'
 
 // Cada tela é um pedaço separado do pacote: a primeira visita só baixa e executa a tela aberta.
@@ -43,6 +44,20 @@ function tabRoute(view: Route['view'], route: Route, year: number | null, sessio
   if (view === 'session') return { view: 'session', path: route.view === 'session' ? route.path : session }
   if (view === 'live') return { view: 'live' }
   return { view, year: route.view === 'standings' || route.view === 'calendar' ? year : null }
+}
+
+/** Pessoas com o site aberto agora; some enquanto não houver número (ou sem o Firebase configurado). */
+function OnlineBadge() {
+  const count = useOnlineCount()
+  if (count == null || count < 1) return null
+  const label = count === 1 ? '1 pessoa com o apexView aberto agora' : `${count} pessoas com o apexView aberto agora`
+  return (
+    <span className="online" title={label} aria-label={label} role="status">
+      <i aria-hidden="true" />
+      <b>{count}</b>
+      <span className="online-word">online</span>
+    </span>
+  )
 }
 
 export default function App() {
@@ -91,6 +106,7 @@ export default function App() {
               ))}
             </select>
           )}
+          <OnlineBadge />
         </div>
       </header>
       <main>
