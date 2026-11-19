@@ -126,3 +126,40 @@ def test_host_desconhecido_e_recusado():
     assert client.get("/api/status").status_code == 200
     assert client.get("/api/status", headers={"host": "evil.example:8000"}).status_code == 400
     assert client.get("/docs").status_code == 404
+
+
+def test_pulo_na_gravacao_so_troca_o_estado_quando_pronto(monkeypatch):
+    import asyncio
+
+    from feed import Message
+
+    msgs = [Message(float(t), "LapCount", {"CurrentLap": t}) for t in range(1, 21)]
+    monkeypatch.setattr(server.recording, "read", lambda path: ({}, iter(msgs)))
+    old = server.LiveState()
+    server.hub.state = old
+    server.hub.start_time = 0.0
+    server.hub.paused = True  # não reproduz depois do pulo: o teste só olha o avanço rápido
+    generation = server.hub.generation
+    seen = []
+    real_apply = server.LiveState.apply
+
+    def apply(self, msg):
+        seen.append(server.hub.state is old)  # durante o avanço, o site ainda vê o estado anterior
+        real_apply(self, msg)
+
+    monkeypatch.setattr(server.LiveState, "apply", apply)
+
+    async def run():
+        task = asyncio.create_task(server.run_replay(server.Path("x"), 10.0))
+        for _ in range(50):
+            await asyncio.sleep(0)
+            if server.hub.generation != generation:
+                break
+        task.cancel()
+
+    asyncio.run(run())
+    assert seen and all(seen)
+    assert server.hub.state is not old
+    assert server.hub.generation == generation + 1
+    assert server.hub.now() == 10.0
+    assert server.hub.source()["generation"] == generation + 1

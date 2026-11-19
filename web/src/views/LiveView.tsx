@@ -333,11 +333,18 @@ function ReplayBar({
   choosing: boolean
 }) {
   const [seek, setSeek] = useState<number | null>(null)
+  // pulo enviado e ainda não aplicado pelo servidor: a barra fica no ponto escolhido até ele chegar
+  const [pending, setPending] = useState<{ value: number; generation: number } | null>(null)
+  const generation = s.source.generation ?? 0
+  const waiting = pending != null && pending.generation === generation
   const elapsed = s.source.elapsed ?? 0
   const duration = s.source.duration ?? 0
-  const value = seek ?? elapsed
+  const value = seek ?? (waiting ? pending.value : elapsed)
   const commit = () => {
-    if (seek != null) send({ cmd: 'seek', value: seek })
+    if (seek != null) {
+      send({ cmd: 'seek', value: seek })
+      setPending({ value: seek, generation })
+    }
     setSeek(null)
   }
   return (
@@ -369,8 +376,9 @@ function ReplayBar({
           aria-label="Ponto da gravação"
         />
       </div>
-      <span className="clock">
+      <span className="clock" aria-busy={waiting}>
         {formatClock(value)} <span className="muted">/ {formatClock(duration)}</span>
+        {waiting && <span className="muted"> · indo…</span>}
       </span>
       <div className="speeds" role="group" aria-label="Velocidade">
         {SPEEDS.map((v) => (

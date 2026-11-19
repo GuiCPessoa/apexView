@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LiveSnapshot } from '../types/live'
-import { DelayBuffer, accountKind, emptySticky, formatExpiry, formatLiveGap, formatRemaining, loginUrl, sourceKey, tracePath, withSticky } from './live'
+import { DelayBuffer, accountKind, bufferKey, emptySticky, formatExpiry, formatLiveGap, formatRemaining, loginUrl, sourceKey, tracePath, withSticky } from './live'
 
 describe('DelayBuffer', () => {
   it('devolve o valor de alguns segundos atrás', () => {
@@ -57,6 +57,16 @@ describe('tracePath', () => {
 
   it('degrau para canais liga/desliga e limita fora da escala', () => {
     expect(tracePath([0, 1000, 3000], [0, 1, 2], 2000, 0, 1, 100, 10, true)).toBe('M0.0,10.0H50.0V0.0H100.0V0.0')
+  })
+})
+
+describe('bufferKey', () => {
+  it('muda com o pulo na gravação, mas a sessão continua a mesma', () => {
+    const at = (generation?: number) =>
+      ({ source: { mode: 'replay', selected: '2026/a/', generation } }) as unknown as LiveSnapshot
+    expect(bufferKey(at(1))).not.toBe(bufferKey(at(2)))
+    expect(sourceKey(at(1))).toBe(sourceKey(at(2)))
+    expect(bufferKey(at(undefined))).toBe(bufferKey(at(0)))
   })
 })
 

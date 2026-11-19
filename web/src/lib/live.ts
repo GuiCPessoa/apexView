@@ -137,9 +137,18 @@ export function tracePath(
   return path
 }
 
-/** Identifica o que está passando (ao vivo ou qual gravação); quando muda, o histórico do atraso é descartado. */
+/** Identifica o que está passando (ao vivo ou qual gravação): trocou, os cartões recomeçam. */
 export function sourceKey(snap: LiveSnapshot): string {
   return `${snap.source.mode}:${snap.source.selected ?? ''}`
+}
+
+/**
+ * Como `sourceKey`, mais o pulo na gravação (`generation`). Quando muda, o histórico guardado
+ * para o atraso é descartado: só nessa hora, com o novo instante já em mãos, e não no clique
+ * (senão a tela fica sem snapshot até o servidor terminar o pulo).
+ */
+export function bufferKey(snap: LiveSnapshot): string {
+  return `${sourceKey(snap)}:${snap.source.generation ?? 0}`
 }
 
 export type LiveStatus = 'connecting' | 'open' | 'closed'
@@ -182,9 +191,9 @@ export function useLiveFeed(delayS: number) {
             return
           }
           const snap = msg
-          const key = sourceKey(snap)
+          const key = bufferKey(snap)
           if (key !== lastKey.current) {
-            // trocou de sessão: o atraso não deve mostrar a anterior
+            // trocou de sessão ou pulou na gravação: o atraso não deve mostrar o instante anterior
             buffer.current.clear()
             lastKey.current = key
           }
@@ -215,7 +224,6 @@ export function useLiveFeed(delayS: number) {
   }, [])
 
   const send = (cmd: Record<string, unknown>) => {
-    if (cmd.cmd === 'seek') buffer.current.clear()
     socket.current?.send(JSON.stringify(cmd))
   }
 

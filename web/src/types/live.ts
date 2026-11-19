@@ -71,6 +71,7 @@ export interface LiveSource {
   speed?: number
   paused?: boolean
   elapsed?: number // s desde o início da gravação
+  generation?: number // sobe a cada pulo na gravação já aplicado pelo servidor
   duration?: number
 }
 

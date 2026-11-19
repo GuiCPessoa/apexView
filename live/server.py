@@ -172,6 +172,9 @@ class Hub:
         self.selected: str | None = None  # sessão (caminho no arquivo da F1) em reprodução
         self.start_time = 0.0
         self.duration = 0.0
+        # sobe a cada pulo na gravação (ou troca de sessão) já aplicado: o site descarta o que
+        # guardou para o atraso só quando o novo instante chega, sem ficar sem nada para mostrar
+        self.generation = 0
         self.task: asyncio.Task | None = None
         # escolha de sessão e modo automático
         self.auto = False
@@ -213,6 +216,7 @@ class Hub:
                 "paused": self.paused,
                 "elapsed": round(max(0.0, self.now() - self.start_time), 1),
                 "duration": round(self.duration, 1),
+                "generation": self.generation,
             })
         return info
 
@@ -274,9 +278,13 @@ def recording_span(path: Path) -> tuple[float, float]:
 
 
 async def run_replay(path: Path, start_offset: float) -> None:
-    """Reproduz a gravação no ritmo original × velocidade. Antes de `start_offset`, aplica tudo de uma vez."""
+    """Reproduz a gravação no ritmo original × velocidade. Antes de `start_offset`, aplica tudo de uma vez.
+
+    O avanço rápido monta o estado à parte: enquanto ele roda, o site continua vendo o instante
+    anterior (e não um estado pela metade); a troca acontece de uma vez, junto com o relógio.
+    """
     hub.mode = "replay"
-    hub.state = LiveState()
+    state = LiveState()
     target = hub.start_time + start_offset
     _, messages = recording.read(path)
     pending = None
@@ -284,10 +292,12 @@ async def run_replay(path: Path, start_offset: float) -> None:
         if msg.time > target:
             pending = msg
             break
-        hub.state.apply(msg)
+        state.apply(msg)
         if i % 5000 == 0:
             await asyncio.sleep(0)  # não trava o servidor no avanço rápido
+    hub.state = state
     hub.set_clock(target)
+    hub.generation += 1
 
     while pending is not None:
         while hub.paused or hub.now() < pending.time:

@@ -324,7 +324,7 @@ O backend local (`live/server.py`) não grava arquivos em `data/`: ele manda **s
    "selected": "2026/2026-11-08_São_Paulo_Grand_Prix/2026-11-08_Race/", "loading": null,
    "liveSession": null, "nextLive": {"label": "Las Vegas Grand Prix · Treino 1", "event": "Las Vegas Grand Prix", "code": "FP1", "start": "2026-11-20T00:30:00Z"},
    "account": {"connected": true, "expires": 1795695240.0},
-   "recording": "2026-20-r.jsonl.gz", "speed": 4, "paused": false, "elapsed": 6000.0, "duration": 9600.6}}
+   "recording": "2026-20-r.jsonl.gz", "speed": 4, "paused": false, "elapsed": 6000.0, "duration": 9600.6, "generation": 3}}
 ```
 
 - `time` é o horário do feed (epoch UTC, s). As posições `x`, `y` (metros) são interpoladas 2 s atrás desse horário, para ficarem suaves entre as amostras; os canais do carro (`speed`, `gear`, `rpm`, `throttle`, `brake`, `drs`) usam o mesmo instante, para casar com o mapa.
@@ -334,7 +334,7 @@ O backend local (`live/server.py`) não grava arquivos em `data/`: ele manda **s
 - `raceControl` traz **todas** as mensagens da direção de prova até `time`, em ordem, com os mesmos campos do `race_control.json` (mas `time` em epoch UTC). `weatherHistory` traz as amostras de clima até `time` (mesmos campos do `weather.json`, `time` em epoch UTC); `weather` é a mais recente.
 - `outline`, `raceControl` e `weatherHistory` só vão no snapshot quando mudam; quando a chave falta, vale o último recebido. Quem conecta recebe o snapshot completo.
 - `traces` só vem para quem pediu, com `{"cmd": "traces", "drivers": ["NOR", "VER"]}` (até 2 pilotos): por sigla, `{"current": ..., "previous": ...}` com a volta atual (até o instante mostrado) e a anterior. Cada uma é `{"lap", "d", "speed", "throttle", "brake"}`: listas alinhadas, `d` em metros desde a linha (integrada pela velocidade, como o FastF1), `brake` 1/0. `null` enquanto não houver uma passagem pela linha observada de verdade (a primeira leitura de voltas, ao conectar, não conta).
-- `source.mode`: `"live"` (feed ao vivo), `"replay"` (simulação) ou `"idle"` (sem gravação, esperando a escolha). Na simulação o site pode mandar comandos pelo mesmo WebSocket: `{"cmd": "pause", "value": true}`, `{"cmd": "speed", "value": 16}` (1, 2, 4, 8, 16 ou 32) e `{"cmd": "seek", "value": 3600}` (segundos desde o início da gravação).
+- `source.mode`: `"live"` (feed ao vivo), `"replay"` (simulação) ou `"idle"` (sem gravação, esperando a escolha). Na simulação o site pode mandar comandos pelo mesmo WebSocket: `{"cmd": "pause", "value": true}`, `{"cmd": "speed", "value": 16}` (1, 2, 4, 8, 16 ou 32) e `{"cmd": "seek", "value": 3600}` (segundos desde o início da gravação). O pulo monta o novo instante à parte: até terminar, os snapshots continuam no instante anterior; quando ele entra, `generation` sobe (o site descarta o que guardou para o atraso só nessa hora).
 - `source.auto`: o servidor está no modo automático (liga o ao vivo no horário das sessões do `calendar.json`). `nextLive` é a próxima sessão em que isso acontece e `liveSession`, a sessão do calendário durante o ao vivo.
 - `source.canChoose`: fora do ao vivo, o site pode trocar a sessão com `{"cmd": "select", "path": "2026/…_Grand_Prix/…_Qualifying/"}` (caminho do arquivo da F1). Se ainda não houver gravação dela, o servidor baixa e mostra o progresso em `loading` (`{"path", "label", "done", "total"}`, em tópicos); ao terminar, começa a simulação. `selected` é a sessão em simulação. Durante o ao vivo, `select` é ignorado.
 
