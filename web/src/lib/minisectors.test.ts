@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Lap, LapTelemetry } from '../types/data'
-import { defaultDrivers, driverColors, lapClock, lighten, miniSectors, timeAt } from './minisectors'
+import { defaultDrivers, driverColors, lighten, miniSectors, timeAt } from './minisectors'
+import { lapClock } from './telemetry'
 
 /** Volta de 1000 m: `pace(x)` dá a velocidade (m/s) na fração x; amostras a cada `every` s. */
 function makeLap(pace: (x: number) => number, opts: { offset?: number; every?: number } = {}): LapTelemetry {
@@ -31,9 +32,9 @@ describe('lapClock', () => {
   it('fecha a volta em (0, 0) e no tempo oficial', () => {
     const lap = makeLap(() => 50, { offset: 0.3 })
     const clock = lapClock(lap)!
-    expect(clock.f[0]).toBe(0)
+    expect(clock.d[0]).toBe(0)
     expect(clock.t[0]).toBe(0)
-    expect(clock.f[clock.f.length - 1]).toBe(1)
+    expect(clock.length).toBeCloseTo(1000, 0)
     expect(clock.t[clock.t.length - 1]).toBeCloseTo(lap.lapTime!, 6)
     expect(timeAt(clock, 0.5)).toBeCloseTo(10, 1)
   })
@@ -44,7 +45,7 @@ describe('lapClock', () => {
     broken.d[5] = null as unknown as number
     broken.d[8] = broken.d[7] - 1
     expect(lapClock(broken)).not.toBeNull()
-    expect(lapClock({ ...lap, d: lap.d.slice(0, 3), t: lap.t.slice(0, 3) })).toBeNull()
+    expect(lapClock({ ...lap, d: lap.d.slice(0, 3), t: lap.t.slice(0, 3) }, 10)).toBeNull()
   })
 })
 

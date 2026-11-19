@@ -253,7 +253,7 @@ export default function TelemetryPanel({ path, meta, results, laps, focus, onFoc
           />
           <p className="foot">
             {driverB
-              ? 'Voltas alinhadas por distância a cada 5 m. A diferença é o tempo acumulado de B menos o de A no mesmo ponto da pista. Dados do carro a ~4 Hz.'
+              ? 'Voltas alinhadas por distância a cada 5 m, com a volta de B ajustada ao comprimento da de A. A diferença é o tempo acumulado de B menos o de A no mesmo ponto da pista e termina na diferença dos tempos de volta. Dados do carro a ~4 Hz.'
               : 'Canais da volta por distância, a cada 5 m. Dados do carro a ~4 Hz.'}
           </p>
         </>

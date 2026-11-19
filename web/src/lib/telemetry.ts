@@ -46,25 +46,77 @@ export function interpStep(xs: number[], ys: number[], grid: number[]): number[]
   return out
 }
 
-function channelsOn(lap: LapTelemetry, grid: number[]): Channels {
+/**
+ * Relógio da volta: tempo (s) por distância (m), com as duas pontas fechadas.
+ *
+ * A primeira amostra do carro vem alguns metros depois da linha (até ~0,3 s) e a última, antes
+ * dela. Sem fechar as pontas, o tempo "parado" no começo distorce a diferença entre duas voltas
+ * logo na largada e no fim. Por isso a volta começa em (0 m, 0 s) e termina no tempo oficial,
+ * com a distância final estimada pela última velocidade. `length` é a distância total da volta.
+ */
+export interface LapClock {
+  d: number[]
+  t: number[]
+  length: number
+}
+
+export function lapClock(lap: LapTelemetry, minSamples = 2): LapClock | null {
+  const d: number[] = []
+  const t: number[] = []
+  for (let i = 0; i < lap.d.length; i++) {
+    const di = lap.d[i]
+    const ti = lap.t[i]
+    if (di == null || ti == null || !Number.isFinite(di) || !Number.isFinite(ti)) continue
+    if (d.length && (di <= d[d.length - 1] || ti <= t[t.length - 1])) continue // sem voltar atrás
+    d.push(di)
+    t.push(ti)
+  }
+  if (d.length < minSamples) return null
+  if (d[0] > 0 && t[0] > 0) {
+    d.unshift(0)
+    t.unshift(0)
+  }
+  const last = d.length - 1
+  if (lap.lapTime != null && lap.lapTime > t[last]) {
+    const speed = lap.speed[lap.speed.length - 1] ?? 0
+    d.push(d[last] + (Math.max(speed, 0) / 3.6) * (lap.lapTime - t[last]))
+    t.push(lap.lapTime)
+  }
+  const length = d[d.length - 1]
+  return length > 0 ? { d, t, length } : null
+}
+
+/** Canais de uma volta na grade; `scale` estica as distâncias da volta (para alinhar com outra). */
+function channelsOn(lap: LapTelemetry, grid: number[], clock: LapClock | null, scale = 1): Channels {
+  const xs = scale === 1 ? lap.d : lap.d.map((x) => x * scale)
   return {
-    t: interpLinear(lap.d, lap.t, grid),
-    speed: interpLinear(lap.d, lap.speed, grid),
-    throttle: interpLinear(lap.d, lap.throttle, grid),
-    brake: interpStep(lap.d, lap.brake, grid),
-    gear: interpStep(lap.d, lap.gear, grid),
-    drs: interpStep(lap.d, lap.drs, grid),
+    t: clock ? interpLinear(scale === 1 ? clock.d : clock.d.map((x) => x * scale), clock.t, grid) : interpLinear(xs, lap.t, grid),
+    speed: interpLinear(xs, lap.speed, grid),
+    throttle: interpLinear(xs, lap.throttle, grid),
+    brake: interpStep(xs, lap.brake, grid),
+    gear: interpStep(xs, lap.gear, grid),
+    drs: interpStep(xs, lap.drs, grid),
   }
 }
 
-/** Alinha as voltas numa grade de distância. Sem `b`, prepara só a volta de A (um piloto). */
+/**
+ * Alinha as voltas numa grade de distância. Sem `b`, prepara só a volta de A (um piloto).
+ *
+ * A distância vem da integração da velocidade, então duas voltas completas terminam com alguns
+ * metros de diferença. A volta de B é esticada para ter o comprimento da de A: assim os mesmos
+ * pontos da pista ficam alinhados e a diferença no fim é exatamente a diferença dos tempos de volta.
+ */
 export function compareLaps(a: LapTelemetry, b: LapTelemetry | null, step = 5): Comparison {
-  const end = b ? Math.min(a.d[a.d.length - 1], b.d[b.d.length - 1]) : a.d[a.d.length - 1]
+  const clockA = lapClock(a)
+  const clockB = b ? lapClock(b) : null
+  const scaleB = clockA && clockB ? clockA.length / clockB.length : 1
+  const lastA = clockA ? clockA.length : a.d[a.d.length - 1]
+  const end = b && !(clockA && clockB) ? Math.min(lastA, b.d[b.d.length - 1]) : lastA
   const d: number[] = []
   for (let x = 0; x <= end; x += step) d.push(x)
-  const ca = channelsOn(a, d)
+  const ca = channelsOn(a, d, clockA)
   if (!b) return { d, a: ca, b: null, delta: null }
-  const cb = channelsOn(b, d)
+  const cb = channelsOn(b, d, clockB, scaleB)
   return { d, a: ca, b: cb, delta: d.map((_, i) => cb.t[i] - ca.t[i]) }
 }
 
