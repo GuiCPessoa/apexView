@@ -91,6 +91,12 @@ No cartão **Telemetria**, escolha o piloto **A** e o piloto **B** e a volta de 
 - Passe o mouse para ver os valores; arraste para dar zoom; clique duas vezes para voltar.
 - Quer ver só um piloto? No seletor **B**, escolha **Nenhum · só o piloto A**.
 
+### 6. Veja quem dominou cada trecho
+O cartão **Mini setores** divide a volta mais rápida de cada piloto em trechos iguais (10, 25 ou 50) e pinta o mapa com a cor de quem foi mais rápido em cada um.
+- Entram os pilotos em foco, completados pelos mais rápidos da sessão (até três). Use **×** e **+ piloto** para trocar.
+- A legenda mostra a porcentagem da volta que cada um dominou; passe o mouse num trecho para ver os tempos.
+- Diferenças menores que 0,01 s aparecem em cinza, como empate: a telemetria (~4 Hz) não tem precisão para separar.
+
 <table>
   <tr>
     <td width="96" align="center"><img src="docs/images/icon.png" alt="Ícone do apexView" width="80"></td>

@@ -11,6 +11,7 @@ import { EvolutionChart, SectorsTable } from '../panels/QualiPanels'
 import { GapsChart, PitTable, PositionsChart, RaceResults, Strategy } from '../panels/RacePanels'
 import ReplayPanel from '../panels/ReplayPanel'
 import { PracticeResults, QualifyingResults } from '../panels/ResultsPanels'
+import MiniSectorsPanel from '../panels/MiniSectorsPanel'
 import TelemetryPanel from '../panels/TelemetryPanel'
 import type { DataIndex, DriverResult, Lap, SessionIndexEntry, SessionMeta } from '../types/data'
 
@@ -112,6 +113,7 @@ function Dashboard({ path, meta, results, laps, tab }: DashboardProps) {
                 <PracticeResults results={results} laps={laps} focus={focus} onToggle={onToggle} />
               )}
             </Card>
+            <MiniSectorsPanel path={path} meta={meta} results={results} laps={laps} focus={focus} />
             <Card title="Melhores voltas e setores" span={12} id="sectors">
               <SectorsTable results={results} laps={laps} focus={focus} onToggle={onToggle} />
             </Card>
@@ -158,6 +160,7 @@ function RaceCards({
       <Card title="Resultado" span={4} className="results-card" aside={<span className="muted">clique para focar</span>}>
         <RaceResults results={results} laps={laps} {...focusProps} />
       </Card>
+      <MiniSectorsPanel path={path} meta={meta} results={results} laps={laps} focus={focus} />
       <Card title="Posições volta a volta" span={6} id="positions">
         <PositionsChart drivers={drivers} results={results} laps={laps} n={n} bands={bands} cursorLap={cursorLap} {...focusProps} />
       </Card>
