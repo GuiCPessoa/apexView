@@ -54,6 +54,9 @@ export function countOnline(presence: unknown): number {
   ).length
 }
 
+/** forceWebSockets precisa vir antes da primeira conexão e só uma vez por página. */
+let transportPinned = false
+
 function localStore(): KeyValueStore | null {
   try {
     return window.localStorage
@@ -77,6 +80,13 @@ export function useOnlineCount(dbUrl: string = PRESENCE_DB_URL): number | null {
     const start = async () => {
       const [{ initializeApp, getApps }, db] = await Promise.all([import('@firebase/app'), import('@firebase/database')])
       if (stopped) return
+      if (!transportPinned) {
+        // Só WebSocket. Depois de uma falha de conexão, o SDK grava "previous_websocket_failure"
+        // no localStorage e passa a começar pelo long-polling, que carrega scripts do Firebase
+        // e é barrado pela CSP (script-src 'self'): o contador nunca mais conectava naquele navegador.
+        db.forceWebSockets()
+        transportPinned = true
+      }
       const app = getApps().find((a) => a.name === 'presence') ?? initializeApp({ databaseURL: dbUrl }, 'presence')
       const database = db.getDatabase(app)
       db.goOnline(database) // a mesma instância pode ter sido desligada por uma montagem anterior
