@@ -170,7 +170,12 @@ class CarHistory:
         return self.ch[i] if i >= 0 and t - self.t[i] < 5 else {}
 
     def trace(self, t0: float, t1: float, lap: int) -> dict | None:
-        """Canais de t0 a t1 com a distância integrada pela velocidade (como o FastF1)."""
+        """Canais de t0 a t1 com a distância integrada pela velocidade (como o FastF1).
+
+        Amostras com o carro parado (mesma distância e mesmos valores da anterior) ficam de fora:
+        no box ou na garagem a "volta atual" crescia sem parar (980 amostras, 16 KB num TL2) sem
+        mudar nada no gráfico, que é por distância.
+        """
         i0, i1 = bisect.bisect_left(self.t, t0), bisect.bisect_right(self.t, t1)
         if i1 - i0 < 2:
             return None
@@ -182,10 +187,13 @@ class CarHistory:
             if prev_t is not None:
                 dist += (prev_v + v) / 2 / 3.6 * (self.t[k] - prev_t)
             prev_t, prev_v = self.t[k], v
-            d.append(round(dist))
-            speed.append(round(v))
-            throttle.append(min(100, max(0, round(to_float(ch.get("4")) or 0))))
-            brake.append(1 if (to_float(ch.get("5")) or 0) > 0 else 0)
+            point = (round(dist), round(v), min(100, max(0, round(to_float(ch.get("4")) or 0))), 1 if (to_float(ch.get("5")) or 0) > 0 else 0)
+            if d and k < i1 - 1 and point == (d[-1], speed[-1], throttle[-1], brake[-1]):
+                continue  # parado: igual à amostra anterior (a última sempre entra)
+            d.append(point[0])
+            speed.append(point[1])
+            throttle.append(point[2])
+            brake.append(point[3])
         return {"lap": lap, "d": d, "speed": speed, "throttle": throttle, "brake": brake}
 
 

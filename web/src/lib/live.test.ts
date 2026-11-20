@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LiveSnapshot } from '../types/live'
-import { DELAY_MARGIN_MS, DelayBuffer, accountKind, bufferKey, emptySticky, formatExpiry, formatLiveGap, formatRemaining, loginUrl, sourceKey, tracePath, withSticky, withoutTraces } from './live'
+import { DELAY_MARGIN_MS, DelayBuffer, accountKind, bufferKey, emptySticky, formatExpiry, formatLiveGap, formatRemaining, loginUrl, sourceKey, tracePoints, withSticky, withoutTraces } from './live'
 
 describe('DelayBuffer', () => {
   it('devolve o valor de alguns segundos atrás', () => {
@@ -82,15 +82,23 @@ describe('withSticky', () => {
     expect(next.raceControl).toBe(rc)
     expect(withSticky({ type: 'snapshot', outline: null } as LiveSnapshot, last).outline).toBeNull()
   })
+
+  it('repete a última telemetria da volta (o servidor manda 1 vez por segundo)', () => {
+    const last = emptySticky()
+    const traces = { NOR: { current: null, previous: null } }
+    expect(withSticky({ type: 'snapshot' } as LiveSnapshot, last).traces).toEqual({})
+    withSticky({ type: 'snapshot', traces } as unknown as LiveSnapshot, last)
+    expect(withSticky({ type: 'snapshot' } as LiveSnapshot, last).traces).toBe(traces)
+  })
 })
 
-describe('tracePath', () => {
-  it('escala distância e valor para o retângulo do gráfico', () => {
-    expect(tracePath([0, 500, 1000], [0, 50, 100], 1000, 0, 100, 200, 100)).toBe('M0.0,100.0L100.0,50.0L200.0,0.0')
+describe('tracePoints', () => {
+  it('converte distância e valor em pixels (y para baixo)', () => {
+    expect(tracePoints([0, 500, 1000], [0, 50, 100], 1000, 0, 100, 200, 100)).toEqual([0, 100, 100, 50, 200, 0])
   })
 
-  it('degrau para canais liga/desliga e limita fora da escala', () => {
-    expect(tracePath([0, 1000, 3000], [0, 1, 2], 2000, 0, 1, 100, 10, true)).toBe('M0.0,10.0H50.0V0.0H100.0V0.0')
+  it('degraus e distância além do fim da escala', () => {
+    expect(tracePoints([0, 1000, 3000], [0, 1, 2], 2000, 0, 1, 100, 10, true)).toEqual([0, 10, 50, 10, 50, 0, 100, 0, 100, 0])
   })
 })
 

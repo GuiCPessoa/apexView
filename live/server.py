@@ -47,6 +47,7 @@ from state import LiveState, parse_duration
 log = logging.getLogger("live")
 
 TICK_S = 0.25  # 4 snapshots por segundo
+TRACES_EVERY_S = 1.0  # telemetria da volta (a parte pesada do snapshot): 1 vez por segundo
 LOGIN_RETRY_S = 5  # ao vivo sem conta conectada: tenta de novo a cada 5 s
 SPEEDS = (1, 2, 4, 8, 16, 32)
 SCHEDULE_CHECK_S = 30  # modo automático: confere o calendário a cada 30 s
@@ -160,6 +161,7 @@ class Hub:
         self.clients: set[WebSocket] = set()
         # pilotos cujos traços de volta cada cliente quer (telemetria ao vivo)
         self.wants: dict[WebSocket, list[str]] = {}
+        self.traces_at: dict[WebSocket, float] = {}  # última telemetria da volta enviada a cada cliente
         self.error: str | None = None
         self.mode = "idle"
         # relógio da fonte: tempo do feed no último instante conhecido
@@ -526,6 +528,7 @@ async def handle_command(ws: WebSocket, cmd: dict) -> None:
     action = cmd.get("cmd")
     if action == "traces" and isinstance(cmd.get("drivers"), list):
         hub.wants[ws] = [str(d) for d in cmd["drivers"][:MAX_TRACE_DRIVERS]]
+        hub.traces_at.pop(ws, None)  # trocou de piloto: manda a telemetria já no próximo envio
         return
     if action == "catalog":
         year = cmd.get("year")
@@ -561,6 +564,11 @@ def drop_unchanged(snap: dict, sent: dict) -> None:
             sent[key] = snap[key]
 
 
+def traces_due(last: float | None, now: float, every: float = TRACES_EVERY_S) -> bool:
+    """Hora de mandar a telemetria da volta de novo? (meio passo de folga para não pular um envio)"""
+    return last is None or now - last >= every - TICK_S / 2
+
+
 def next_tick(deadline: float, now: float, tick: float = TICK_S) -> float:
     """Próximo instante de envio: um passo depois do anterior, descontando o tempo gasto no envio.
 
@@ -584,16 +592,22 @@ async def broadcast() -> None:
         drop_unchanged(snap, sent)
         text = json.dumps(snap, ensure_ascii=False, separators=(",", ":"))
         now = hub.now()
+        mono = loop.time()
         traces: dict[tuple, str] = {}  # clientes que pedem os mesmos pilotos recebem o mesmo texto
         for ws in list(hub.clients):
             wanted = tuple(hub.wants.get(ws, ()))
-            if wanted and wanted not in traces:
+            # a telemetria da volta vai 1 vez por segundo; nos outros envios o site repete a última
+            due = bool(wanted) and traces_due(hub.traces_at.get(ws), mono)
+            if due and wanted not in traces:
                 traces[wanted] = json.dumps({**snap, "traces": hub.state.traces(list(wanted), now)}, ensure_ascii=False, separators=(",", ":"))
             try:
-                await ws.send_text(traces[wanted] if wanted else text)
+                await ws.send_text(traces[wanted] if due else text)
+                if due:
+                    hub.traces_at[ws] = mono
             except Exception:
                 hub.clients.discard(ws)
                 hub.wants.pop(ws, None)
+                hub.traces_at.pop(ws, None)
 
 
 # ---------- App ----------
@@ -747,6 +761,7 @@ def create_app(args: argparse.Namespace) -> FastAPI:
         finally:
             hub.clients.discard(ws)
             hub.wants.pop(ws, None)
+            hub.traces_at.pop(ws, None)
 
     return app
 

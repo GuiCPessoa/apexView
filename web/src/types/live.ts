@@ -109,7 +109,10 @@ export interface LiveSnapshot {
   /** Traçado (metros). Ausente = igual ao último recebido; null = ainda não montado. */
   outline?: [number, number][] | null
   source: LiveSource
-  /** Só para os pilotos pedidos com {"cmd": "traces"}: volta atual (até o instante mostrado) e a anterior. */
+  /**
+   * Só para os pilotos pedidos com {"cmd": "traces"}: volta atual (até o instante mostrado) e a anterior.
+   * Vem 1 vez por segundo (e logo depois de trocar os pilotos); nos outros snapshots o site repete a última.
+   */
   traces?: Record<string, { current: LiveTrace | null; previous: LiveTrace | null }>
 }
 

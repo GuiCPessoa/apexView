@@ -131,10 +131,10 @@ export function withoutTraces(snap: LiveSnapshot): LiveSnapshot {
   return rest
 }
 
-/** Campos que o servidor só manda quando mudam. */
-const STICKY_KEYS = ['outline', 'raceControl', 'weatherHistory'] as const
+/** Campos que o servidor só manda quando mudam (a telemetria da volta, 1 vez por segundo). */
+const STICKY_KEYS = ['outline', 'raceControl', 'weatherHistory', 'traces'] as const
 export type StickyFields = Required<Pick<LiveSnapshot, (typeof STICKY_KEYS)[number]>>
-export const emptySticky = (): StickyFields => ({ outline: null, raceControl: [], weatherHistory: [] })
+export const emptySticky = (): StickyFields => ({ outline: null, raceControl: [], weatherHistory: [], traces: {} })
 
 /**
  * Completa um snapshot com os últimos valores recebidos dos campos que só vêm quando mudam
@@ -159,8 +159,11 @@ export function formatLiveGap(text: string | null): string {
   return text
 }
 
-/** Caminho SVG de um canal ao longo da volta (x = distância, y invertido para o SVG). */
-export function tracePath(
+/**
+ * Pontos (x, y em pixels, em sequência) de um canal ao longo da volta: x = distância, y invertido
+ * (0 no topo). Com `step`, desenha degraus (canal liga/desliga, como o freio).
+ */
+export function tracePoints(
   d: number[],
   values: number[],
   xMax: number,
@@ -169,17 +172,17 @@ export function tracePath(
   width: number,
   height: number,
   step = false,
-): string {
+): number[] {
   const X = (v: number) => (Math.min(v, xMax) / xMax) * width
   const Y = (v: number) => height - ((Math.max(yMin, Math.min(yMax, v)) - yMin) / (yMax - yMin)) * height
-  let path = ''
+  const out: number[] = []
   for (let i = 0; i < d.length; i++) {
-    const x = X(d[i]).toFixed(1)
-    const y = Y(values[i]).toFixed(1)
-    if (i === 0) path = `M${x},${y}`
-    else path += step ? `H${x}V${y}` : `L${x},${y}`
+    const x = X(d[i])
+    const y = Y(values[i])
+    if (step && i > 0) out.push(x, out[out.length - 1]) // anda na horizontal antes de subir/descer
+    out.push(x, y)
   }
-  return path
+  return out
 }
 
 /** Identifica o que está passando (ao vivo ou qual gravação): trocou, os cartões recomeçam. */
@@ -260,6 +263,7 @@ export function useLiveFeed(delayS: number) {
           if (changed) {
             // trocou de sessão ou pulou na gravação: o atraso não deve mostrar o instante anterior
             buffer.current.clear()
+            sticky.current.traces = {} // telemetria da sessão (ou do instante) anterior não vale mais
             lastKey.current = key
           }
           buffer.current.push(withSticky(snap, sticky.current), Date.now(), delayRef.current * 1000)

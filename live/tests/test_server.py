@@ -178,3 +178,12 @@ def test_envio_em_ritmo_fixo_desconta_o_trabalho():
 def test_envio_atrasado_recomeca_sem_rajada():
     # travou 1 s: em vez de mandar 4 snapshots seguidos para "alcançar", recomeça de agora
     assert server.next_tick(10.0, 11.0, 0.25) == 11.25
+
+
+def test_telemetria_da_volta_vai_uma_vez_por_segundo():
+    assert server.traces_due(None, 100.0)  # nunca mandou: manda já
+    assert not server.traces_due(100.0, 100.25)
+    assert not server.traces_due(100.0, 100.5)
+    assert server.traces_due(100.0, 101.0)
+    # envio com um pouco de adiantamento não pula um segundo inteiro
+    assert server.traces_due(100.0, 100.9)

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Card from '../components/Card'
 import CarsCanvas, { type CanvasCar } from '../components/CarsCanvas'
 import RaceControlFeed from '../components/RaceControlFeed'
+import TraceCanvas from '../components/TraceCanvas'
 import WeatherPanel from '../components/WeatherPanel'
 import { formatLapTime, loadTrack } from '../lib/data'
 import { dimmed, toggleFocus } from '../lib/focus'
@@ -14,7 +15,6 @@ import {
   formatRemaining,
   loginUrl,
   sourceKey,
-  tracePath,
   useLiveFeed,
   type LiveStatus,
 } from '../lib/live'
@@ -775,87 +775,90 @@ function CarsCard({
           </div>
         ))}
       </div>
-      <LapTraces s={s} drivers={shown} lapLength={lapLength} />
+      <LapTraces traces={s.traces ?? NO_TRACES} drivers={shown} lapLength={lapLength} />
     </Card>
   )
 }
 
 // ---------- Gráficos da volta ao vivo ----------
 
-const TRACE_W = 1000
+const NO_TRACES: LiveTraces = {}
 const TRACE_CHARTS = [
   { key: 'speed', label: 'Velocidade (km/h)', h: 120, min: 0, max: 360, step: false, ticks: [100, 200, 300] },
   { key: 'throttle', label: 'Acelerador (%)', h: 56, min: 0, max: 100, step: false, ticks: [50] },
   { key: 'brake', label: 'Freio', h: 28, min: 0, max: 1, step: true, ticks: [] },
 ] as const
 
-/** Volta atual (linha cheia) e a anterior (tracejada) dos pilotos mostrados, por distância. */
-function LapTraces({ s, drivers, lapLength }: { s: LiveSnapshot; drivers: LiveDriver[]; lapLength: number | null }) {
-  const traces = s.traces ?? {}
-  const series = drivers.map((d, i) => {
-    const raw = d.teamColor ?? '#888'
-    const color = i === 1 && drivers[0] && similarColors(raw, drivers[0].teamColor ?? '#888') ? '#ececf0' : raw
-    return { d, color, ...(traces[d.driver] ?? { current: null, previous: null }) }
-  })
-  const ends = series.flatMap((x) => [x.previous?.d.at(-1) ?? 0, x.current?.d.at(-1) ?? 0])
-  const xMax = Math.max(lapLength ?? 0, ...ends, 1000)
-  const hasData = series.some((x) => x.current || x.previous)
+type LiveTraces = NonNullable<LiveSnapshot['traces']>
 
-  if (!hasData) {
-    return <p className="muted traces-empty">Os gráficos da volta aparecem depois que o piloto cruza a linha de chegada.</p>
-  }
-  return (
-    <div className="lap-traces">
-      <div className="traces-legend">
-        {series.map((x) => (
-          <span key={x.d.driver}>
-            <i style={{ background: x.color }} />
-            {x.d.driver} {x.current ? `volta ${x.current.lap}` : ''}
-          </span>
-        ))}
-        <span className="muted">tracejado: volta anterior</span>
-      </div>
-      {TRACE_CHARTS.map((c) => (
-        <div key={c.key} className="trace-chart">
-          <span className="trace-label">{c.label}</span>
-          <svg viewBox={`0 0 ${TRACE_W} ${c.h}`} preserveAspectRatio="none" style={{ height: c.h }} role="img" aria-label={c.label}>
-            {c.ticks.map((v) => {
-              const y = c.h - ((v - c.min) / (c.max - c.min)) * c.h
-              return <line key={v} x1={0} x2={TRACE_W} y1={y} y2={y} className="trace-grid" />
-            })}
-            {series.map((x) =>
-              x.previous ? (
-                <path
-                  key={`${x.d.driver}-prev`}
-                  d={tracePath(x.previous.d, x.previous[c.key], xMax, c.min, c.max, TRACE_W, c.h, c.step)}
-                  stroke={x.color}
-                  className="trace-line prev"
-                />
-              ) : null,
-            )}
-            {series.map((x) =>
-              x.current ? (
-                <path
-                  key={`${x.d.driver}-cur`}
-                  d={tracePath(x.current.d, x.current[c.key], xMax, c.min, c.max, TRACE_W, c.h, c.step)}
-                  stroke={x.color}
-                  className="trace-line"
-                />
-              ) : null,
-            )}
-          </svg>
+/**
+ * Volta atual (linha cheia) e a anterior (tracejada) dos pilotos mostrados, por distância.
+ * `traces` só muda quando o servidor manda telemetria nova (1 vez por segundo): com o memo, os
+ * gráficos não são refeitos nos outros snapshots.
+ */
+const LapTraces = memo(
+  function LapTraces({ traces, drivers, lapLength }: { traces: LiveTraces; drivers: LiveDriver[]; lapLength: number | null }) {
+    const lines = drivers.map((d, i) => {
+      const raw = d.teamColor ?? '#888'
+      const color = i === 1 && drivers[0] && similarColors(raw, drivers[0].teamColor ?? '#888') ? '#ececf0' : raw
+      return { d, color, ...(traces[d.driver] ?? { current: null, previous: null }) }
+    })
+    const ends = lines.flatMap((x) => [x.previous?.d.at(-1) ?? 0, x.current?.d.at(-1) ?? 0])
+    const xMax = Math.max(lapLength ?? 0, ...ends, 1000)
+    const hasData = lines.some((x) => x.current || x.previous)
+
+    if (!hasData) {
+      return <p className="muted traces-empty">Os gráficos da volta aparecem depois que o piloto cruza a linha de chegada.</p>
+    }
+    return (
+      <div className="lap-traces">
+        <div className="traces-legend">
+          {lines.map((x) => (
+            <span key={x.d.driver}>
+              <i style={{ background: x.color }} />
+              {x.d.driver} {x.current ? `volta ${x.current.lap}` : ''}
+            </span>
+          ))}
+          <span className="muted">tracejado: volta anterior</span>
         </div>
-      ))}
-      <div className="trace-axis">
-        {Array.from({ length: Math.floor(xMax / 1000) }, (_, i) => (i + 1) * 1000).map((m) => (
-          <span key={m} style={{ left: `${(m / xMax) * 100}%` }}>
-            {(m / 1000).toFixed(0)} km
-          </span>
+        {TRACE_CHARTS.map((c) => (
+          <div key={c.key} className="trace-chart">
+            <span className="trace-label">{c.label}</span>
+            <TraceCanvas
+              label={c.label}
+              height={c.h}
+              min={c.min}
+              max={c.max}
+              step={c.step}
+              ticks={c.ticks}
+              xMax={xMax}
+              series={[
+                ...lines.flatMap((x) =>
+                  x.previous ? [{ key: `${x.d.driver}-prev`, color: x.color, d: x.previous.d, values: x.previous[c.key], previous: true }] : [],
+                ),
+                ...lines.flatMap((x) =>
+                  x.current ? [{ key: `${x.d.driver}-cur`, color: x.color, d: x.current.d, values: x.current[c.key], previous: false }] : [],
+                ),
+              ]}
+            />
+          </div>
         ))}
+        <div className="trace-axis">
+          {Array.from({ length: Math.floor(xMax / 1000) }, (_, i) => (i + 1) * 1000).map((m) => (
+            <span key={m} style={{ left: `${(m / xMax) * 100}%` }}>
+              {(m / 1000).toFixed(0)} km
+            </span>
+          ))}
+        </div>
       </div>
-    </div>
-  )
-}
+    )
+  },
+  // os objetos dos pilotos mudam a cada snapshot; aqui só importam quem é e a cor
+  (a, b) =>
+    a.traces === b.traces &&
+    a.lapLength === b.lapLength &&
+    a.drivers.map((d) => `${d.driver}:${d.teamColor}`).join() === b.drivers.map((d) => `${d.driver}:${d.teamColor}`).join(),
+)
 
 function Bar({ label, value, max, className, text }: { label: string; value: number | null; max: number; className: string; text: string }) {
   const fill = value == null ? 0 : Math.max(0, Math.min(1, value / max))

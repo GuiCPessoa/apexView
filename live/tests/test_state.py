@@ -183,3 +183,21 @@ def test_historico_do_clima():
     assert [w["time"] for w in history] == [T0, T0 + 60]
     assert history[0]["trackTemp"] == 40.5 and history[0]["rainfall"] is False
     assert len(st.snapshot(T0 + 10)["weatherHistory"]) == 1
+
+
+def test_volta_atual_nao_cresce_com_o_carro_parado():
+    from state import CarHistory
+
+    h = CarHistory()
+    t = T0
+    for _ in range(20):  # andando a 180 km/h
+        h.add(t, {"2": 180, "4": 100, "5": 0})
+        t += 0.25
+    for _ in range(400):  # parado na garagem por 100 s
+        h.add(t, {"2": 0, "4": 0, "5": 0})
+        t += 0.25
+    tr = h.trace(T0, t, lap=3)
+    assert len(tr["d"]) < 30  # antes: 420 amostras
+    assert len(tr["d"]) == len(tr["speed"]) == len(tr["throttle"]) == len(tr["brake"])
+    assert tr["d"][-1] == tr["d"][-2]  # a última amostra (parado) sempre entra
+    assert tr["speed"][-1] == 0
