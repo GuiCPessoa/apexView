@@ -127,7 +127,8 @@ Deixe o terminal aberto e vá à aba **Ao vivo** do site (o publicado ou o local
 - **Entre com a sua conta F1 TV:** clique em **Entrar com a F1 TV** e use o e-mail e a senha da assinatura, na página que abre. A página é do backend no seu computador: a senha vai direto para a F1 e não fica salva. O acesso vale alguns dias; o bloco **Conta F1 TV** mostra até quando e avisa quando for hora de renovar.
 - **No horário de uma sessão**, o ao vivo liga sozinho e grava o feed em `live/recordings/`. Ajuste o **Atraso** para sincronizar com a TV.
 - **Fora das sessões**, use **Trocar sessão** para escolher outra. As que ainda não foram baixadas chegam em cerca de 1 minuto. Dá para pausar, mudar a velocidade e pular.
-- Na **Telemetria ao vivo**, escolha **Um piloto** ou **Comparar dois** e clique na torre para escolher quem acompanhar.
+- A tela é um painel em blocos: os dois pilotos em foco nas laterais (posição, voltas, setores com mini setores, velocidade, motor, pedais e pneu), clima, mapa e telemetria da volta no centro, e a torre de tempos embaixo. Clique num piloto na torre ou no mapa para pô-lo nas colunas.
+- No mapa, a chave **Domínio** pinta cada mini setor oficial com quem tem o melhor tempo da sessão nele.
 
 <details>
 <summary><b>Outros modos e segurança do servidor</b></summary>

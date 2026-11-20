@@ -10,6 +10,31 @@ export interface LiveTimed {
   best: 'overall' | 'personal' | null // roxo (melhor da sessão) ou verde (melhor do piloto)
 }
 
+/** Setor da torre: tempo do setor nesta volta (null no meio dela), o da volta anterior e os mini setores. */
+export interface LiveSector {
+  time: number | null
+  best: 'overall' | 'personal' | null
+  previous: number | null
+  /** Status de cada mini setor: 2048 amarelo, 2049 verde, 2051 roxo, 2064 box, 0 ainda não passou. */
+  segments: number[]
+}
+
+/** Velocidade máxima na reta (radar "ST" da F1), em km/h. */
+export interface LiveSpeedTrap {
+  value: number
+  best: 'overall' | 'personal' | null
+}
+
+/**
+ * Domínio da pista: para cada mini setor oficial (na ordem da volta), quem tem o melhor tempo da
+ * sessão e onde ele termina (posição em metros; null enquanto ninguém passou por ali).
+ */
+export interface LiveDominance {
+  sizes: number[] // mini setores por setor, ex.: [6, 7, 10]
+  owners: (string | null)[]
+  ends: ([number, number] | null)[]
+}
+
 export interface LiveDriver {
   driver: string // sigla de 3 letras
   number: string
@@ -22,7 +47,8 @@ export interface LiveDriver {
   interval: string | null
   lastLap: LiveTimed | null
   bestLap: LiveTimed | null
-  sectors: (LiveTimed | null)[]
+  sectors: (LiveSector | null)[]
+  topSpeed?: LiveSpeedTrap | null // ausente em backends antigos
   laps: number | null
   pits: number | null
   inPit: boolean
@@ -108,6 +134,8 @@ export interface LiveSnapshot {
   raceControl?: RaceControlMessage[]
   /** Traçado (metros). Ausente = igual ao último recebido; null = ainda não montado. */
   outline?: [number, number][] | null
+  /** Domínio da pista. Ausente = igual ao último recebido; null = sem mini setores no feed. */
+  dominance?: LiveDominance | null
   source: LiveSource
   /**
    * Só para os pilotos pedidos com {"cmd": "traces"}: volta atual (até o instante mostrado) e a anterior.

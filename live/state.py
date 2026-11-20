@@ -38,6 +38,11 @@ HISTORY_S = 300.0  # histórico por carro: cobre a volta anterior e a atual, mes
 MIN_OUTLINE_POINTS = 120
 MAX_OUTLINE_GAP_M = 250.0  # início e fim da volta precisam se encontrar
 WEATHER_HISTORY_MAX = 600  # ~10 h de amostras (o feed manda uma por minuto)
+# status dos mini setores no feed: 2048 amarelo, 2049 verde (melhor do piloto), 2051 roxo (melhor da
+# sessão), 2064 box, 0 ainda não passou
+SEGMENT_OVERALL = 2051
+SEGMENT_ON_TRACK = (2048, 2049, 2051)
+SEGMENT_SAMPLES = 20  # posições guardadas por mini setor para achar onde ele termina
 # "CAR 44 (HAM)" nas mensagens que não trazem RacingNumber
 CAR_IN_MESSAGE = re.compile(r"\bCARS? (\d{1,2}) \(([A-Z]{3})\)")
 
@@ -214,6 +219,10 @@ class LiveState:
         self.weather_history: list[dict] = []
         self._crossings: dict[str, deque[Crossing]] = {}
         self._pitted: set[str] = set()  # passou pelos boxes desde a última passagem pela linha
+        # domínio da pista: dono do roxo e posições de fim de cada mini setor (índice global)
+        self._segment_owner: dict[int, str] = {}
+        self._segment_ends: dict[int, deque] = {}
+        self._dominance: dict | None = None  # cache; None = refazer
 
     # ---------- Entrada ----------
 
@@ -223,6 +232,8 @@ class LiveState:
             if msg.topic == "TimingData":
                 self._watch_laps(msg)
             self.topics[msg.topic] = merge(self.topics.get(msg.topic), msg.data)
+            if msg.topic == "TimingData":
+                self._watch_segments(msg)
             if msg.topic == "WeatherData":
                 self._record_weather(msg.time)
         elif msg.topic == "Position":
@@ -270,7 +281,64 @@ class LiveState:
                     if math.hypot(x1 - x0, y1 - y0) <= MAX_OUTLINE_GAP_M:
                         self.outline = points
 
+    def _watch_segments(self, msg: Message) -> None:
+        """Mini setores que mudaram de cor: quem fez o roxo e onde o carro estava (fim do trecho)."""
+        lines = ((self.topics.get("TimingData") or {}).get("Lines")) or {}
+        listing = self.topics.get("DriverList") or {}
+        for num, patch in ((msg.data or {}).get("Lines") or {}).items():
+            sectors = patch.get("Sectors") if isinstance(patch, dict) else None
+            if not sectors:
+                continue
+            sizes = segment_sizes(lines.get(num))
+            for si, sector in indexed(sectors):
+                segments = sector.get("Segments") if isinstance(sector, dict) else None
+                if not segments or si >= len(sizes):
+                    continue
+                for gi, seg in indexed(segments):
+                    status = seg.get("Status") if isinstance(seg, dict) else None
+                    if status not in SEGMENT_ON_TRACK:
+                        continue
+                    g = sum(sizes[:si]) + gi
+                    if status == SEGMENT_OVERALL:
+                        tla = (listing.get(num) or {}).get("Tla")
+                        if tla and self._segment_owner.get(g) != tla:
+                            self._segment_owner[g] = tla
+                            self._dominance = None
+                    ends = self._segment_ends.setdefault(g, deque(maxlen=SEGMENT_SAMPLES))
+                    if len(ends) >= SEGMENT_SAMPLES:
+                        continue  # posição já conhecida: o fim do trecho não muda na sessão
+                    pos = self.tracks[num].at(msg.time) if num in self.tracks else None
+                    if pos:
+                        ends.append(pos)
+                        self._dominance = None
+
     # ---------- Saída ----------
+
+    def dominance(self) -> dict | None:
+        """Domínio da pista: para cada mini setor oficial, quem tem o melhor tempo da sessão (o último
+        roxo) e onde ele termina na pista (a posição típica dos carros quando o trecho muda de cor)."""
+        if self._dominance is not None:
+            return self._dominance
+        lines = ((self.topics.get("TimingData") or {}).get("Lines")) or {}
+        sizes = next((segment_sizes(l) for l in lines.values() if segment_sizes(l)), [])
+        total = sum(sizes)
+        if not total:
+            return None
+        ends = []
+        for g in range(total):
+            pts = list(self._segment_ends.get(g, ()))
+            if not pts:
+                ends.append(None)
+                continue
+            # medoide: a posição observada mais próxima de todas as outras (descarta leituras atrasadas)
+            best = min(pts, key=lambda p: sum(math.hypot(p[0] - q[0], p[1] - q[1]) for q in pts))
+            ends.append([round(best[0], 1), round(best[1], 1)])
+        self._dominance = {
+            "sizes": sizes,
+            "owners": [self._segment_owner.get(g) for g in range(total)],
+            "ends": ends,
+        }
+        return self._dominance
 
     def traces(self, drivers: list[str], now: float) -> dict:
         """Volta atual (até o instante mostrado) e volta anterior de cada piloto pedido, por sigla."""
@@ -318,6 +386,7 @@ class LiveState:
             "drivers": self._drivers(now - POSITION_LAG_S),
             "raceControl": self._race_control(now),
             "outline": self.outline,
+            "dominance": self.dominance(),
         }
 
     def _clock(self, now: float) -> dict | None:
@@ -401,6 +470,9 @@ class LiveState:
                 if len(stats) >= part:
                     gap_text = stats[part - 1].get("TimeDiffToFastest")
                     interval_text = stats[part - 1].get("TimeDifftoPositionAhead")
+            if gap_text is None and not part:  # treinos: diferença para a melhor volta
+                gap_text = line.get("TimeDiffToFastest")
+                interval_text = line.get("TimeDiffToPositionAhead")
             rows.append({
                 "driver": d["Tla"],
                 "number": num,
@@ -413,7 +485,8 @@ class LiveState:
                 "interval": interval_text or None,
                 "lastLap": _timed(line.get("LastLapTime")),
                 "bestLap": _timed(line.get("BestLapTime")),
-                "sectors": [_timed(s) for s in items(line.get("Sectors"))[:3]],
+                "sectors": [_sector(s) for s in items(line.get("Sectors"))[:3]],
+                "topSpeed": _speed((line.get("Speeds") or {}).get("ST")),
                 "laps": line.get("NumberOfLaps"),
                 "pits": line.get("NumberOfPitStops"),
                 "inPit": bool(line.get("InPit")),
@@ -435,6 +508,46 @@ class LiveState:
             })
         rows.sort(key=lambda r: (r["position"] or 99, r["line"] or 99))
         return rows
+
+
+def indexed(value):
+    """Pares (índice, valor) de uma lista ou de um patch {"0": ..., "3": ...} do feed."""
+    if isinstance(value, list):
+        return list(enumerate(value))
+    if isinstance(value, dict):
+        return [(int(k), v) for k, v in value.items() if str(k).isdigit()]
+    return []
+
+
+def segment_sizes(line) -> list[int]:
+    """Quantos mini setores tem cada setor (ex.: [6, 7, 10] em Las Vegas)."""
+    if not isinstance(line, dict):
+        return []
+    return [len(items(s.get("Segments"))) for s in items(line.get("Sectors"))[:3] if isinstance(s, dict)]
+
+
+def _sector(value) -> dict | None:
+    """Setor da torre: tempo atual (ou None no meio da volta), o da volta anterior e os mini setores."""
+    if not isinstance(value, dict):
+        return None
+    timed = _timed(value)
+    return {
+        "time": timed["time"] if timed else None,
+        "best": timed["best"] if timed else None,
+        "previous": parse_time(value.get("PreviousValue")),
+        "segments": [s.get("Status", 0) if isinstance(s, dict) else 0 for s in items(value.get("Segments"))],
+    }
+
+
+def _speed(value) -> dict | None:
+    """Radar de velocidade ({"Value": "283", "OverallFastest": ...}) -> {"value": 283, "best": ...}."""
+    if not isinstance(value, dict):
+        return None
+    v = to_float(value.get("Value"))
+    if not v:
+        return None
+    best = "overall" if value.get("OverallFastest") else "personal" if value.get("PersonalFastest") else None
+    return {"value": int(v), "best": best}
 
 
 def _timed(value) -> dict | None:

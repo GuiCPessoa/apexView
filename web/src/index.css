@@ -3276,3 +3276,643 @@ select.ms-add {
     gap: 1px;
   }
 }
+
+/* ---------- Ao vivo em blocos (painel: piloto A | centro | piloto B) ---------- */
+.pw-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.pw-top .stat {
+  min-width: 140px;
+  padding: 10px 14px;
+  gap: 2px;
+  border-radius: 10px;
+}
+
+.pw-top .stat select {
+  margin: 2px 0;
+}
+
+.pw-title {
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.pw-title h1 {
+  margin: 2px 0;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+}
+
+.pw-title p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.pitwall {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 6fr) minmax(0, 3fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.pw-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pw-blk {
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.pw-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pw-label-gap {
+  margin-top: 6px;
+}
+
+.pw-blk-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.pw-blk-head .pw-label {
+  margin: 0;
+}
+
+.pw-head-aside {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.pw-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.pw-big {
+  font-size: 46px;
+  font-weight: 900;
+  font-style: italic;
+  line-height: 0.95;
+}
+
+.pw-mid {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.pw-mid small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.pw-small {
+  font-size: 12px;
+}
+
+.pw-head {
+  border-top: 3px solid var(--border);
+}
+
+.pw-name {
+  font-size: 22px;
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.pw-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.pw-col.right .pw-head {
+  text-align: right;
+}
+
+.pw-col.right .pw-sub {
+  justify-content: flex-end;
+}
+
+.pw-num {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.pit-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 16px;
+  border-radius: 4px;
+  color: #fff;
+  background: #3b82f6;
+  vertical-align: 2px;
+}
+
+.pit-badge.out {
+  background: #0e7490;
+}
+
+.pw-laps {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 10px;
+}
+
+.pw-laps b {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.pw-sector {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pw-sector .mono {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+/* mini setores (barrinhas) e tempos de setor */
+.segs {
+  display: flex;
+  gap: 3px;
+}
+
+.segs i {
+  flex: 1;
+  min-width: 3px;
+  height: 5px;
+  border-radius: 2px;
+  background: #2a2a33;
+}
+
+.segs i.seg-y {
+  background: #f5c84c;
+}
+
+.segs i.seg-p {
+  background: var(--up);
+}
+
+.segs i.seg-o {
+  background: var(--fastest);
+}
+
+.segs i.seg-pit {
+  background: #3b82f6;
+}
+
+.not-best {
+  color: #f5c84c;
+}
+
+.sec-time small {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pw-gauge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rpm-gauge {
+  width: 92px;
+  height: 56px;
+  flex: none;
+}
+
+.rpm-track,
+.rpm-fill {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.rpm-track {
+  stroke: #24242b;
+}
+
+.rpm-gauge text {
+  fill: var(--text);
+  font-size: 24px;
+  font-weight: 900;
+  text-anchor: middle;
+}
+
+.drs-chip {
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.drs-chip.on {
+  color: #04140c;
+  background: var(--up);
+  border-color: var(--up);
+}
+
+.pedal {
+  display: grid;
+  grid-template-columns: 74px 1fr 40px;
+  gap: 8px;
+  align-items: center;
+  margin: 5px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pedal b {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  text-align: right;
+}
+
+.pedal-track {
+  height: 8px;
+  overflow: hidden;
+  background: #24242b;
+  border-radius: 4px;
+}
+
+.pedal-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  transform-origin: left center;
+}
+
+.pedal-fill.throttle {
+  background: var(--up);
+}
+
+.pedal-fill.brake {
+  background: var(--accent);
+}
+
+.pw-tyre {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tyre-ring {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border: 5px solid var(--muted);
+  border-radius: 50%;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.tyre-ring.soft {
+  border-color: #e8002d;
+}
+
+.tyre-ring.medium {
+  border-color: #f5c400;
+}
+
+.tyre-ring.hard {
+  border-color: var(--text);
+}
+
+.tyre-ring.inter {
+  border-color: #43b02a;
+}
+
+.tyre-ring.wet {
+  border-color: #0067ad;
+}
+
+/* clima em blocos */
+.wx-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 10px;
+}
+
+.wx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wx-item svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.wx-item small {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1.1;
+}
+
+.wx-item b {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.wx-item b span {
+  margin-left: 3px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.pw-map .track-map {
+  max-height: min(56vh, 520px);
+}
+
+.pw-bottom {
+  margin-top: 12px;
+}
+
+/* torre de tempos */
+.live-tower-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-tower-table th {
+  padding: 0 10px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.live-tower-table td {
+  padding: 7px 10px;
+  border-top: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.live-tower-table tbody tr {
+  cursor: pointer;
+}
+
+.live-tower-table tbody tr:hover td {
+  background: #18181e;
+}
+
+.live-tower-table tr.focused td {
+  background: #1c1c24;
+}
+
+.live-tower-table tr.dim {
+  opacity: 0.55;
+}
+
+.live-tower-table tr.out {
+  opacity: 0.4;
+}
+
+.live-tower-table .lt-pos {
+  width: 34px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.live-tower-table .lt-team,
+.live-tower-table .lt-driver,
+.live-tower-table .lt-sec {
+  text-align: left;
+}
+
+.live-tower-table td.lt-driver {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.live-tower-table td.lt-gap {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.live-tower-table .lt-lap .mono {
+  font-size: 15px;
+}
+
+.live-tower-table .lt-sec {
+  min-width: 120px;
+}
+
+.live-tower-table .lt-sec .segs {
+  margin-bottom: 3px;
+}
+
+.live-tower-table .lt-sec .segs i {
+  max-width: 18px;
+}
+
+.live-tower-table .lt-sec .mono {
+  font-size: 14px;
+}
+
+.team-chip {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+/* domínio da pista */
+.dom-casing {
+  stroke: #000;
+  stroke-linejoin: round;
+}
+
+.dom-sector circle {
+  fill: var(--bg);
+  stroke: var(--text);
+}
+
+.dom-sector text {
+  fill: var(--muted);
+  font-weight: 800;
+}
+
+.dom-finish {
+  fill: #fff;
+}
+
+.dom-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.dom-row {
+  display: grid;
+  grid-template-columns: 4px 40px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.dom-bar {
+  align-self: stretch;
+  border-radius: 2px;
+}
+
+.dom-meter {
+  height: 6px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: 3px;
+}
+
+.dom-meter span {
+  display: block;
+  height: 100%;
+}
+
+.dom-strip {
+  display: flex;
+  gap: 2px;
+  margin-top: 12px;
+}
+
+.dom-strip span {
+  flex: 1;
+  height: 14px;
+  border-radius: 2px;
+}
+
+.dom-strip span.gap-before {
+  margin-left: 6px;
+}
+
+.dom-sectors {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+@media (max-width: 1100px) {
+  .pitwall {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pitwall .pw-center {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .pitwall {
+    grid-template-columns: 1fr;
+  }
+
+  .pw-title h1 {
+    font-size: 24px;
+  }
+
+  .pw-top .stat {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+
+  .wx-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pw-big {
+    font-size: 38px;
+  }
+
+  .live-tower-table .lt-int,
+  .live-tower-table .lt-best,
+  .live-tower-table .lt-team {
+    display: none;
+  }
+}

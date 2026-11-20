@@ -201,3 +201,36 @@ def test_volta_atual_nao_cresce_com_o_carro_parado():
     assert len(tr["d"]) == len(tr["speed"]) == len(tr["throttle"]) == len(tr["brake"])
     assert tr["d"][-1] == tr["d"][-2]  # a última amostra (parado) sempre entra
     assert tr["speed"][-1] == 0
+
+
+def _timing(time, lines):
+    return Message(time, "TimingData", {"Lines": lines})
+
+
+def test_dominio_da_pista_guarda_o_ultimo_roxo_e_onde_o_trecho_termina():
+    st = LiveState()
+    st.apply(Message(T0, "DriverList", {"1": {"Tla": "NOR"}, "16": {"Tla": "LEC"}}))
+    sectors = [{"Segments": [{"Status": 0}, {"Status": 0}]}, {"Segments": [{"Status": 0}]}]
+    st.apply(_timing(T0, {"1": {"Sectors": sectors}, "16": {"Sectors": sectors}}))
+    for num in ("1", "16"):  # carros parados em pontos conhecidos
+        for k in range(20):
+            st.tracks.setdefault(num, __import__("state").CarTrack()).add(T0 + k, 100.0, 50.0)
+    st.apply(_timing(T0 + 1, {"1": {"Sectors": {"0": {"Segments": {"1": {"Status": 2051}}}}}}))
+    st.apply(_timing(T0 + 2, {"16": {"Sectors": {"1": {"Segments": {"0": {"Status": 2049}}}}}}))
+    d = st.dominance()
+    assert d["sizes"] == [2, 1]
+    assert d["owners"] == [None, "NOR", None]
+    assert d["ends"][1] == [100.0, 50.0] and d["ends"][2] == [100.0, 50.0] and d["ends"][0] is None
+    # outro roxo no mesmo trecho troca o dono
+    st.apply(_timing(T0 + 3, {"16": {"Sectors": {"0": {"Segments": {"1": {"Status": 2051}}}}}}))
+    assert st.dominance()["owners"][1] == "LEC"
+    assert st.snapshot(T0 + 3)["dominance"] is st.dominance()  # cache entre snapshots
+
+
+def test_setor_traz_mini_setores_e_tempo_anterior():
+    from state import _sector, _speed
+
+    s = _sector({"Value": "", "PreviousValue": "31.200", "OverallFastest": False, "Segments": [{"Status": 2049}, {"Status": 0}]})
+    assert s == {"time": None, "best": None, "previous": 31.2, "segments": [2049, 0]}
+    assert _speed({"Value": "283", "OverallFastest": True}) == {"value": 283, "best": "overall"}
+    assert _speed({"Value": ""}) is None

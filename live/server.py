@@ -552,7 +552,7 @@ async def handle_command(ws: WebSocket, cmd: dict) -> None:
 
 
 # Campos grandes que só vão quando mudam (o site guarda o último); quem conecta recebe o completo
-STICKY_KEYS = ("outline", "raceControl", "weatherHistory")
+STICKY_KEYS = ("outline", "raceControl", "weatherHistory", "dominance")
 
 
 def drop_unchanged(snap: dict, sent: dict) -> None:

@@ -30,15 +30,16 @@ def test_catalogo_sem_arquivo_usa_gravacoes():
 
 def test_campos_grandes_so_vao_quando_mudam():
     sent: dict = {}
-    first = {"outline": [[0, 0]], "raceControl": [{"message": "A"}], "weatherHistory": [], "time": 1}
+    dom = {"sizes": [1], "owners": ["VER"], "ends": [[0, 0]]}
+    first = {"outline": [[0, 0]], "raceControl": [{"message": "A"}], "weatherHistory": [], "dominance": dom, "time": 1}
     server.drop_unchanged(first, sent)
-    assert set(first) == {"outline", "raceControl", "weatherHistory", "time"}
-    same = {"outline": [[0, 0]], "raceControl": [{"message": "A"}], "weatherHistory": [], "time": 2}
+    assert set(first) == {"outline", "raceControl", "weatherHistory", "dominance", "time"}
+    same = {"outline": [[0, 0]], "raceControl": [{"message": "A"}], "weatherHistory": [], "dominance": dict(dom), "time": 2}
     server.drop_unchanged(same, sent)
     assert set(same) == {"time"}
-    more = {"outline": [[0, 0]], "raceControl": [{"message": "A"}, {"message": "B"}], "weatherHistory": [], "time": 3}
+    more = {"outline": [[0, 0]], "raceControl": [{"message": "A"}, {"message": "B"}], "weatherHistory": [], "dominance": {**dom, "owners": ["HAM"]}, "time": 3}
     server.drop_unchanged(more, sent)
-    assert set(more) == {"raceControl", "time"}
+    assert set(more) == {"raceControl", "dominance", "time"}
 
 
 def test_caminho_de_sessao_so_aceita_nomes_simples():

@@ -4,14 +4,13 @@ import CarsCanvas, { type CanvasCar } from '../components/CarsCanvas'
 import RaceControlFeed from '../components/RaceControlFeed'
 import TraceCanvas from '../components/TraceCanvas'
 import WeatherPanel from '../components/WeatherPanel'
-import { formatLapTime, loadTrack } from '../lib/data'
-import { dimmed, toggleFocus } from '../lib/focus'
+import { loadTrack } from '../lib/data'
+import { dimmed, telemetryPair, toggleFocus } from '../lib/focus'
 import {
   DELAY_OPTIONS,
   LIVE_URL,
   accountKind,
   formatExpiry,
-  formatLiveGap,
   formatRemaining,
   loginUrl,
   sourceKey,
@@ -20,9 +19,10 @@ import {
 } from '../lib/live'
 import { similarColors } from '../lib/telemetry'
 import { TRACK_STATUS_LABEL, formatClock, makeProjection } from '../lib/replay'
-import { COMPOUND } from '../lib/tyres'
+import { liveDriverColors } from '../lib/liveDisplay'
+import { DominanceMap, DriverColumn, LiveTower, WeatherBlocks } from '../panels/LivePanels'
 import type { DataIndex, RaceControlMessage, Track } from '../types/data'
-import type { LiveAccount, LiveCatalog, LiveDriver, LiveScheduled, LiveSnapshot, LiveTimed } from '../types/live'
+import type { LiveAccount, LiveCatalog, LiveDriver, LiveScheduled, LiveSnapshot } from '../types/live'
 
 
 // horários do feed (epoch UTC em s) na hora local
@@ -66,7 +66,6 @@ const SESSION_NAME: Record<string, string> = {
 export default function LiveView({ index }: { index: DataIndex | null }) {
   const [delay, setDelay] = useState(0)
   const [focus, setFocus] = useState<string[]>([])
-  const [gapMode, setGapMode] = useState<'gap' | 'interval'>('gap')
   const [choosing, setChoosing] = useState(false)
   const { status, snapshot, send, requestTraces, catalog, requestCatalog } = useLiveFeed(delay)
   const now = useNow(30_000)
@@ -74,9 +73,17 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
   const track = useExportedTrack(index, snapshot)
   // cores por piloto com identidade estável (o snapshot muda 4×/s; as cores, quase nunca):
   // assim o feed da direção de prova não redesenha a cada snapshot
-  const colorKey = (snapshot?.drivers ?? []).map((d) => `${d.driver}:${d.teamColor ?? ''}`).join(',')
+  const colorKey = (snapshot?.drivers ?? []).map((d) => `${d.driver}:${d.teamColor ?? ''}:${d.team ?? ''}`).join(',')
   const teamColors = useMemo(
     () => new Map(colorKey ? colorKey.split(',').map((p) => p.split(':') as [string, string]).map(([d, c]) => [d, c || null]) : []),
+    [colorKey],
+  )
+  // cor de cada piloto nos mapas (companheiro de equipe em tom claro); muda quase nunca
+  const colors = useMemo(
+    () =>
+      liveDriverColors(
+        colorKey ? colorKey.split(',').map((p) => { const [driver, teamColor, team] = p.split(':'); return { driver, teamColor: teamColor || null, team: team || null } }) : [],
+      ),
     [colorKey],
   )
 
@@ -96,6 +103,18 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
     setChoosing(false)
   }
 
+  // colunas laterais: os pilotos em foco, completados pelos dois primeiros da torre
+  const [pairA, pairB] = telemetryPair(
+    focus,
+    [s.drivers[0]?.driver ?? null, s.drivers[1]?.driver ?? null],
+    s.drivers.map((d) => d.driver),
+  )
+  const driverA = s.drivers.find((d) => d.driver === pairA) ?? null
+  const driverB = s.drivers.find((d) => d.driver === pairB) ?? null
+  const colorA = (driverA && colors.get(driverA.driver)) ?? '#8b8b97'
+  const colorBRaw = (driverB && colors.get(driverB.driver)) ?? '#8b8b97'
+  const colorB = driverA && driverB && similarColors(colorA, colorBRaw) ? '#ececf0' : colorBRaw
+
   return (
     <section className="live">
       {s.source.error && !(accountOff && s.source.error.startsWith(TOKEN_MISSING_PREFIX)) && (
@@ -104,14 +123,10 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
       {s.source.loading && <DownloadNotice loading={s.source.loading} />}
       {status !== 'open' && <p className="notice warn">Conexão com o backend perdida; reconectando…</p>}
 
-      <div className="hero">
-        <div className="hero-title">
+      <div className="pw-top">
+        <div className="pw-blk pw-title">
           <span className="kicker">
-            {replay ? (
-              <span className="live-badge sim">Simulação</span>
-            ) : (
-              <span className="live-badge">Ao vivo</span>
-            )}{' '}
+            {replay ? <span className="live-badge sim">Simulação</span> : <span className="live-badge">Ao vivo</span>}{' '}
             {hasSession ? (SESSION_NAME[s.session.name ?? ''] ?? s.session.name) : ''}
           </span>
           <h1>{s.session.meeting ?? (idle ? 'Escolha uma sessão' : 'Sem sessão no momento')}</h1>
@@ -124,45 +139,43 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
           </p>
           {s.source.mode !== 'live' && s.source.nextLive && <NextLive next={s.source.nextLive} />}
         </div>
-        <div className="hero-stats">
-          {isRace && s.lap.current != null && (
-            <div className="stat">
-              <span className="stat-label">Volta</span>
-              <span className="stat-value">{`${s.lap.current}/${s.lap.total ?? '—'}`}</span>
-              <span className="stat-sub">{s.clock?.remaining != null ? `${formatClock(s.clock.remaining)} restantes` : ''}</span>
-            </div>
-          )}
-          {!isRace && s.clock?.remaining != null && (
-            <div className="stat">
-              <span className="stat-label">Tempo restante</span>
-              <span className="stat-value">{formatClock(s.clock.remaining)}</span>
-              <span className="stat-sub">{s.clock.running ? 'relógio correndo' : 'relógio parado'}</span>
-            </div>
-          )}
-          {s.trackStatus && (
-            <div className="stat">
-              <span className="stat-label">Pista</span>
-              <span className="stat-value">
-                <span className={`flag flag-${s.trackStatus}`}>{TRACK_STATUS_LABEL[s.trackStatus]}</span>
-              </span>
-              <span className="stat-sub">{s.weather?.rainfall ? 'chovendo' : 'sem chuva'}</span>
-            </div>
-          )}
+        {isRace && s.lap.current != null && (
           <div className="stat">
-            <label className="stat-label" htmlFor="live-delay">
-              Atraso
-            </label>
-            <select id="live-delay" value={delay} onChange={(e) => setDelay(Number(e.target.value))}>
-              {DELAY_OPTIONS.map((d) => (
-                <option key={d} value={d}>
-                  {d === 0 ? 'Sem atraso' : `${d} s`}
-                </option>
-              ))}
-            </select>
-            <span className="stat-sub">para sincronizar com a TV</span>
+            <span className="stat-label">Volta</span>
+            <span className="stat-value">{`${s.lap.current}/${s.lap.total ?? '—'}`}</span>
+            <span className="stat-sub">{s.clock?.remaining != null ? `${formatClock(s.clock.remaining)} restantes` : ''}</span>
           </div>
-          {account && <AccountStat account={account} now={now} />}
+        )}
+        {!isRace && s.clock?.remaining != null && (
+          <div className="stat">
+            <span className="stat-label">Tempo restante</span>
+            <span className="stat-value">{formatClock(s.clock.remaining)}</span>
+            <span className="stat-sub">{s.clock.running ? 'relógio correndo' : 'relógio parado'}</span>
+          </div>
+        )}
+        {s.trackStatus && (
+          <div className="stat">
+            <span className="stat-label">Pista</span>
+            <span className="stat-value">
+              <span className={`flag flag-${s.trackStatus}`}>{TRACK_STATUS_LABEL[s.trackStatus]}</span>
+            </span>
+            <span className="stat-sub">{s.weather?.rainfall ? 'chovendo' : 'sem chuva'}</span>
+          </div>
+        )}
+        <div className="stat">
+          <label className="stat-label" htmlFor="live-delay">
+            Atraso
+          </label>
+          <select id="live-delay" value={delay} onChange={(e) => setDelay(Number(e.target.value))}>
+            {DELAY_OPTIONS.map((d) => (
+              <option key={d} value={d}>
+                {d === 0 ? 'Sem atraso' : `${d} s`}
+              </option>
+            ))}
+          </select>
+          <span className="stat-sub">para sincronizar com a TV</span>
         </div>
+        {account && <AccountStat account={account} now={now} />}
       </div>
 
       {accountOff && <AccountBanner />}
@@ -182,52 +195,47 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
       )}
 
       {hasSession && (
-        <div className="dash" key={sourceKey(s)}>
-          <LiveMap s={s} track={track} focus={focus} onToggle={onToggle} />
-          <Card
-            title="Torre"
-            span={4}
-            aside={
-              <div className="seg" role="group" aria-label="Diferença">
-                <button className={gapMode === 'gap' ? 'active' : undefined} onClick={() => setGapMode('gap')}>
-                  Líder
-                </button>
-                <button className={gapMode === 'interval' ? 'active' : undefined} onClick={() => setGapMode('interval')}>
-                  Intervalo
-                </button>
+        <div key={sourceKey(s)}>
+          <div className="pitwall">
+            <DriverColumn d={driverA} slot="A" color={colorA} />
+            <div className="pw-col pw-center">
+              <WeatherBlocks w={s.weather} />
+              <LiveMap s={s} track={track} focus={focus} onToggle={onToggle} colors={colors} />
+              <div className="pw-blk">
+                <span className="pw-label">Telemetria da volta</span>
+                <TracesRequest drivers={[driverA, driverB]} requestTraces={requestTraces} />
+                <LapTraces
+                  traces={s.traces ?? NO_TRACES}
+                  drivers={[driverA, driverB].filter((d): d is LiveDriver => d != null)}
+                  colors={[colorA, colorB]}
+                  lapLength={track?.lapLength ?? null}
+                />
               </div>
-            }
-          >
-            <ol className="tower live-tower" aria-label="Posições">
-              {s.drivers.map((d) => (
-                <TowerRow key={d.driver} d={d} gapMode={gapMode} focus={focus} onToggle={onToggle} />
-              ))}
-            </ol>
-          </Card>
-          <CarsCard
-            s={s}
-            focus={focus}
-            onFocusChange={setFocus}
-            lapLength={track?.lapLength ?? null}
-            requestTraces={requestTraces}
-          />
-          <Card title="Clima" span={4} className="weather-card">
-            {s.weatherHistory?.length ? (
-              <WeatherPanel samples={s.weatherHistory} now={null} formatX={axisTime} />
-            ) : (
-              <p className="muted">Sem dados de clima ainda.</p>
-            )}
-          </Card>
-          <Card title="Direção de prova" span={12} className="rc-card" aside={<span className="muted">mensagens da sessão inteira</span>}>
-            <RaceControlFeed
-              messages={s.raceControl ?? []}
-              count={null}
-              formatTime={messageTime}
-              focus={focus}
-              onToggle={onToggle}
-              teamColors={teamColors}
-            />
-          </Card>
+            </div>
+            <DriverColumn d={driverB} slot="B" color={colorB} right />
+          </div>
+          <div className="dash pw-bottom">
+            <Card title="Torre de tempos" span={12} aside={<span className="muted">clique num piloto para pôr nas colunas</span>}>
+              <LiveTower drivers={s.drivers} focus={focus} onToggle={onToggle} />
+            </Card>
+            <Card title="Direção de prova" span={8} className="rc-card" aside={<span className="muted">mensagens da sessão inteira</span>}>
+              <RaceControlFeed
+                messages={s.raceControl ?? []}
+                count={null}
+                formatTime={messageTime}
+                focus={focus}
+                onToggle={onToggle}
+                teamColors={teamColors}
+              />
+            </Card>
+            <Card title="Clima na sessão" span={4} className="weather-card">
+              {s.weatherHistory?.length ? (
+                <WeatherPanel samples={s.weatherHistory} now={null} formatX={axisTime} />
+              ) : (
+                <p className="muted">Sem dados de clima ainda.</p>
+              )}
+            </Card>
+          </div>
         </div>
       )}
       <p className="foot">
@@ -235,6 +243,18 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
       </p>
     </section>
   )
+}
+
+/** Pede ao servidor a telemetria da volta dos pilotos das colunas. */
+function TracesRequest({ drivers, requestTraces }: { drivers: (LiveDriver | null)[]; requestTraces: (d: string[]) => void }) {
+  const key = drivers
+    .filter((d): d is LiveDriver => d != null)
+    .map((d) => d.driver)
+    .join(',')
+  useEffect(() => {
+    requestTraces(key ? key.split(',') : [])
+  }, [key, requestTraces])
+  return null
 }
 
 function statusLabel(status: string | null): string | null {
@@ -539,12 +559,15 @@ function LiveMap({
   track,
   focus,
   onToggle,
+  colors,
 }: {
   s: LiveSnapshot
   track: Track | null
   focus: string[]
   onToggle: (d: string) => void
+  colors: Map<string, string>
 }) {
+  const [mode, setMode] = useState<'cars' | 'dominance'>('cars')
   // sem traçado: acumula as posições dos carros para desenhar a pista aos poucos
   const trail = useRef<Map<string, [number, number]>>(new Map())
   const outline = track?.outline ?? s.outline ?? null
@@ -609,15 +632,31 @@ function LiveMap({
   }, [proj, outline, outline ? 0 : Math.floor(points.length / 50)])
 
   return (
-    <Card
-      title="Mapa"
-      span={8}
-      aside={
-        s.trackStatus && <span className={`flag flag-${s.trackStatus}`}>{TRACK_STATUS_LABEL[s.trackStatus]}</span>
-      }
-    >
+    <div className="pw-blk pw-map">
+      <div className="pw-blk-head">
+        <span className="pw-label">
+          {s.session.circuit ?? 'Pista'} · {mode === 'cars' ? 'posição dos carros' : 'domínio da pista'}
+        </span>
+        <span className="pw-head-aside">
+          {s.trackStatus && mode === 'cars' && <span className={`flag flag-${s.trackStatus}`}>{TRACK_STATUS_LABEL[s.trackStatus]}</span>}
+          <span className="seg" role="group" aria-label="O que o mapa mostra">
+            <button className={mode === 'cars' ? 'active' : undefined} aria-pressed={mode === 'cars'} onClick={() => setMode('cars')}>
+              Carros
+            </button>
+            <button className={mode === 'dominance' ? 'active' : undefined} aria-pressed={mode === 'dominance'} onClick={() => setMode('dominance')}>
+              Domínio
+            </button>
+          </span>
+        </span>
+      </div>
       {!proj || !viewBox ? (
         <p className="muted loading">Esperando as posições dos carros…</p>
+      ) : mode === 'dominance' ? (
+        outline ? (
+          <DominanceMap outline={outline} proj={proj} dominance={s.dominance ?? null} colors={colors} />
+        ) : (
+          <p className="muted loading">O domínio aparece quando o traçado da pista estiver pronto.</p>
+        )
       ) : (
         <div className="track-wrap">
           <svg viewBox={proj.viewBox} className="track-map" role="img" aria-label={`Traçado de ${s.session.circuit ?? ''}`}>
@@ -626,157 +665,8 @@ function LiveMap({
           <CarsCanvas viewBox={viewBox} cars={cars} labelSize={proj.size * 0.028} onPick={onToggle} snapDistance={proj.size * 0.15} />
         </div>
       )}
-      {!outline && proj && <p className="foot">O traçado aparece depois que um carro completa uma volta limpa.</p>}
-    </Card>
-  )
-}
-
-// ---------- Torre ----------
-
-function TowerRow({
-  d,
-  gapMode,
-  focus,
-  onToggle,
-}: {
-  d: LiveDriver
-  gapMode: 'gap' | 'interval'
-  focus: string[]
-  onToggle: (d: string) => void
-}) {
-  const c = d.compound ? COMPOUND[d.compound] : null
-  const out = d.retired || d.stopped
-  const gap = d.position === 1 ? (formatLiveGap(d.gap) || 'Líder') : formatLiveGap(gapMode === 'gap' ? d.gap : d.interval)
-  return (
-    <li
-      className={`${focus.includes(d.driver) ? 'focused' : ''} ${out || d.knockedOut ? 'out' : ''} ${dimmed(focus, d.driver) ? 'dim' : ''}`}
-      onClick={() => onToggle(d.driver)}
-    >
-      <span className="t-pos">{d.position ?? ''}</span>
-      <span className="team-bar" style={{ background: d.teamColor ?? 'var(--muted)' }} />
-      <span className="t-driver">{d.driver}</span>
-      {d.inPit && <span className="pit-tag">PIT</span>}
-      {d.pitOut && !d.inPit && <span className="pit-tag out-tag">SAÍDA</span>}
-      <span className="t-spacer" />
-      <Timed t={d.lastLap} className="t-last" />
-      {c && !out && (
-        <span className="tyre-age" title={`${c.label}${d.tyreAge != null ? `, ${d.tyreAge} voltas` : ''}`}>
-          <span className={`tyre ${c.className}`}>{c.letter}</span>
-          <span className="muted">{d.tyreAge ?? ''}</span>
-        </span>
-      )}
-      <span className="t-gap">{out ? (d.retired ? 'Abandono' : 'Parado') : gap}</span>
-    </li>
-  )
-}
-
-function Timed({ t, className }: { t: LiveTimed | null; className?: string }) {
-  if (!t) return <span className={`mono muted ${className ?? ''}`}>—</span>
-  return <span className={`mono ${t.best === 'overall' ? 'fastest' : t.best === 'personal' ? 'personal' : ''} ${className ?? ''}`}>{formatLapTime(t.time)}</span>
-}
-
-// ---------- Carros em foco ----------
-
-function CarsCard({
-  s,
-  focus,
-  onFocusChange,
-  lapLength,
-  requestTraces,
-}: {
-  s: LiveSnapshot
-  focus: string[]
-  onFocusChange: (focus: string[]) => void
-  lapLength: number | null
-  requestTraces: (drivers: string[]) => void
-}) {
-  // "um piloto": telemetria de um carro só, sem comparação. Pôr um segundo piloto em foco volta a comparar.
-  const [solo, setSolo] = useState(false)
-  if (solo && focus.length >= 2) setSolo(false) // ajuste durante o render: sem efeito nem render extra em cascata
-  const chooseSolo = (on: boolean) => {
-    setSolo(on)
-    if (on && focus.length > 1) onFocusChange(focus.slice(0, 1))
-  }
-  const pool = focus.length
-    ? focus.map((f) => s.drivers.find((d) => d.driver === f)).filter((d): d is LiveDriver => d != null)
-    : s.drivers.slice(0, 2)
-  const shown = solo ? pool.slice(0, 1) : pool
-  const hint = solo
-    ? focus.length
-      ? 'piloto em foco'
-      : 'o líder; clique para escolher'
-    : focus.length
-      ? 'pilotos em foco'
-      : 'os dois primeiros; clique para escolher'
-  const key = shown.map((d) => d.driver).join(',')
-  useEffect(() => {
-    requestTraces(key ? key.split(',') : [])
-  }, [key, requestTraces])
-  return (
-    <Card
-      title="Telemetria ao vivo"
-      span={8}
-      aside={
-        <>
-          <span className="muted">{hint}</span>
-          <div className="seg" role="group" aria-label="Pilotos na telemetria">
-            <button className={solo ? 'active' : undefined} onClick={() => chooseSolo(true)}>
-              Um piloto
-            </button>
-            <button className={solo ? undefined : 'active'} onClick={() => chooseSolo(false)}>
-              Comparar dois
-            </button>
-          </div>
-        </>
-      }
-    >
-      <div className="cars">
-        {shown.map((d) => (
-          <div key={d.driver} className="car-panel" style={{ borderColor: d.teamColor ?? 'var(--border)' }}>
-            <div className="car-head">
-              <span className="team-bar" style={{ background: d.teamColor ?? 'var(--muted)' }} />
-              <strong>{d.driver}</strong>
-              <span className="muted">{d.team}</span>
-              <span className="t-spacer" />
-              <span className="car-pos">P{d.position ?? '—'}</span>
-            </div>
-            <div className="gauges">
-              <div className="speed">
-                <span className="big">{d.speed ?? '—'}</span>
-                <span className="muted">km/h</span>
-              </div>
-              <div className="gear">
-                <span className="big">{d.gear == null ? '—' : d.gear === 0 ? 'N' : d.gear}</span>
-                <span className="muted">marcha</span>
-              </div>
-              <div className="bars">
-                <Bar label="RPM" value={d.rpm} max={13000} className="rpm" text={d.rpm != null ? d.rpm.toLocaleString('pt-BR') : '—'} />
-                <Bar label="Acelerador" value={d.throttle} max={100} className="throttle" text={d.throttle != null ? `${d.throttle}%` : '—'} />
-                <Bar label="Freio" value={d.brake} max={100} className="brake" text={d.brake ? 'sim' : 'não'} />
-              </div>
-              <span className={`drs ${d.drs ? 'on' : ''}`}>DRS</span>
-            </div>
-            <div className="lap-times">
-              <div>
-                <span className="muted">Última</span>
-                <Timed t={d.lastLap} />
-              </div>
-              <div>
-                <span className="muted">Melhor</span>
-                <Timed t={d.bestLap} />
-              </div>
-              {[0, 1, 2].map((i) => (
-                <div key={i}>
-                  <span className="muted">S{i + 1}</span>
-                  <Timed t={d.sectors[i] ?? null} />
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <LapTraces traces={s.traces ?? NO_TRACES} drivers={shown} lapLength={lapLength} />
-    </Card>
+      {!outline && proj && mode === 'cars' && <p className="foot">O traçado aparece depois que um carro completa uma volta limpa.</p>}
+    </div>
   )
 }
 
@@ -797,12 +687,8 @@ type LiveTraces = NonNullable<LiveSnapshot['traces']>
  * gráficos não são refeitos nos outros snapshots.
  */
 const LapTraces = memo(
-  function LapTraces({ traces, drivers, lapLength }: { traces: LiveTraces; drivers: LiveDriver[]; lapLength: number | null }) {
-    const lines = drivers.map((d, i) => {
-      const raw = d.teamColor ?? '#888'
-      const color = i === 1 && drivers[0] && similarColors(raw, drivers[0].teamColor ?? '#888') ? '#ececf0' : raw
-      return { d, color, ...(traces[d.driver] ?? { current: null, previous: null }) }
-    })
+  function LapTraces({ traces, drivers, colors, lapLength }: { traces: LiveTraces; drivers: LiveDriver[]; colors: string[]; lapLength: number | null }) {
+    const lines = drivers.map((d, i) => ({ d, color: colors[i] ?? '#888', ...(traces[d.driver] ?? { current: null, previous: null }) }))
     const ends = lines.flatMap((x) => [x.previous?.d.at(-1) ?? 0, x.current?.d.at(-1) ?? 0])
     const xMax = Math.max(lapLength ?? 0, ...ends, 1000)
     const hasData = lines.some((x) => x.current || x.previous)
@@ -857,20 +743,6 @@ const LapTraces = memo(
   (a, b) =>
     a.traces === b.traces &&
     a.lapLength === b.lapLength &&
+    a.colors.join() === b.colors.join() &&
     a.drivers.map((d) => `${d.driver}:${d.teamColor}`).join() === b.drivers.map((d) => `${d.driver}:${d.teamColor}`).join(),
 )
-
-function Bar({ label, value, max, className, text }: { label: string; value: number | null; max: number; className: string; text: string }) {
-  const fill = value == null ? 0 : Math.max(0, Math.min(1, value / max))
-  return (
-    <div className={`bar ${className}`}>
-      <span className="bar-label">
-        {label} <b>{text}</b>
-      </span>
-      <span className="bar-track">
-        {/* escala em vez de largura: muda sem refazer o layout da página */}
-        <span style={{ transform: `scaleX(${fill})` }} />
-      </span>
-    </div>
-  )
-}

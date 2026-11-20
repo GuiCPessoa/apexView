@@ -132,9 +132,9 @@ export function withoutTraces(snap: LiveSnapshot): LiveSnapshot {
 }
 
 /** Campos que o servidor só manda quando mudam (a telemetria da volta, 1 vez por segundo). */
-const STICKY_KEYS = ['outline', 'raceControl', 'weatherHistory', 'traces'] as const
+const STICKY_KEYS = ['outline', 'raceControl', 'weatherHistory', 'traces', 'dominance'] as const
 export type StickyFields = Required<Pick<LiveSnapshot, (typeof STICKY_KEYS)[number]>>
-export const emptySticky = (): StickyFields => ({ outline: null, raceControl: [], weatherHistory: [], traces: {} })
+export const emptySticky = (): StickyFields => ({ outline: null, raceControl: [], weatherHistory: [], traces: {}, dominance: null })
 
 /**
  * Completa um snapshot com os últimos valores recebidos dos campos que só vêm quando mudam
