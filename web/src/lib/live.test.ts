@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LiveSnapshot } from '../types/live'
-import { DelayBuffer, accountKind, bufferKey, emptySticky, formatExpiry, formatLiveGap, formatRemaining, loginUrl, sourceKey, tracePath, withSticky } from './live'
+import { DELAY_MARGIN_MS, DelayBuffer, accountKind, bufferKey, emptySticky, formatExpiry, formatLiveGap, formatRemaining, loginUrl, sourceKey, tracePath, withSticky, withoutTraces } from './live'
 
 describe('DelayBuffer', () => {
   it('devolve o valor de alguns segundos atrás', () => {
@@ -22,6 +22,40 @@ describe('DelayBuffer', () => {
     const b = new DelayBuffer<number>(2000)
     for (let s = 0; s <= 10; s++) b.push(s, s * 1000)
     expect(b.at(10_000, 60_000)).toBe(8)
+  })
+
+  it('diz quando o próximo snapshot deve aparecer', () => {
+    const b = new DelayBuffer<number>()
+    b.push(1, 1000)
+    b.push(2, 1250)
+    b.push(3, 1500)
+    // sem atraso, o mais novo já está na tela
+    expect(b.nextAt(1500, 0)).toBeNull()
+    // com 10 s de atraso: às 11.100 mostra o 1 e o 2 entra às 11.250
+    expect(b.at(11_100, 10_000)).toBe(1)
+    expect(b.nextAt(11_100, 10_000)).toBe(11_250)
+    expect(b.nextAt(11_500, 10_000)).toBeNull()
+  })
+
+  it('guarda por inteiro só o atraso mais a folga; o resto fica leve', () => {
+    const b = new DelayBuffer<{ n: number; heavy: boolean }>(60_000, (v) => ({ ...v, heavy: false }))
+    for (let s = 0; s <= 30; s++) b.push({ n: s, heavy: true }, s * 1000, 10_000)
+    const heavyFrom = 30_000 - 10_000 - DELAY_MARGIN_MS
+    for (let s = 0; s <= 30; s++) {
+      const v = b.at(s * 1000, 0)!
+      expect(v.n).toBe(s)
+      expect(v.heavy).toBe(s * 1000 >= heavyFrom)
+    }
+    expect(b.size).toBe(31)
+  })
+
+  it('withoutTraces tira só a telemetria da volta', () => {
+    const snap = { type: 'snapshot', traces: { NOR: { current: null, previous: null } }, drivers: [] } as unknown as LiveSnapshot
+    const light = withoutTraces(snap)
+    expect('traces' in light).toBe(false)
+    expect(light.drivers).toBe(snap.drivers)
+    const none = { type: 'snapshot' } as unknown as LiveSnapshot
+    expect(withoutTraces(none)).toBe(none)
   })
 })
 

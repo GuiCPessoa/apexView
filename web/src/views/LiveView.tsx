@@ -5,6 +5,7 @@ import WeatherPanel from '../components/WeatherPanel'
 import { formatLapTime, loadTrack } from '../lib/data'
 import { dimmed, toggleFocus } from '../lib/focus'
 import {
+  DELAY_OPTIONS,
   LIVE_URL,
   accountKind,
   formatExpiry,
@@ -22,7 +23,6 @@ import { COMPOUND } from '../lib/tyres'
 import type { DataIndex, RaceControlMessage, Track } from '../types/data'
 import type { LiveAccount, LiveCatalog, LiveDriver, LiveScheduled, LiveSnapshot, LiveTimed } from '../types/live'
 
-const DELAYS = [0, 5, 10, 15, 20, 30, 45, 60]
 
 // horários do feed (epoch UTC em s) na hora local
 const localTime = (epoch: number, seconds: boolean) =>
@@ -152,7 +152,7 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
               Atraso
             </label>
             <select id="live-delay" value={delay} onChange={(e) => setDelay(Number(e.target.value))}>
-              {DELAYS.map((d) => (
+              {DELAY_OPTIONS.map((d) => (
                 <option key={d} value={d}>
                   {d === 0 ? 'Sem atraso' : `${d} s`}
                 </option>

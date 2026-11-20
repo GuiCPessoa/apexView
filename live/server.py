@@ -561,10 +561,23 @@ def drop_unchanged(snap: dict, sent: dict) -> None:
             sent[key] = snap[key]
 
 
+def next_tick(deadline: float, now: float, tick: float = TICK_S) -> float:
+    """Próximo instante de envio: um passo depois do anterior, descontando o tempo gasto no envio.
+
+    Assim o ritmo fica em `tick` exato (sleep fixo somava o trabalho de cada envio: ~260–390 ms).
+    Se o envio atrasou mais que um passo inteiro, recomeça de agora em vez de mandar em rajada.
+    """
+    deadline += tick
+    return deadline if deadline > now else now + tick
+
+
 async def broadcast() -> None:
     sent: dict = {}
+    loop = asyncio.get_running_loop()
+    deadline = loop.time()
     while True:
-        await asyncio.sleep(TICK_S)
+        deadline = next_tick(deadline, loop.time())
+        await asyncio.sleep(max(0.0, deadline - loop.time()))
         if not hub.clients:
             continue
         snap = hub.snapshot()

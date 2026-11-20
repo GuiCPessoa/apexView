@@ -163,3 +163,18 @@ def test_pulo_na_gravacao_so_troca_o_estado_quando_pronto(monkeypatch):
     assert server.hub.generation == generation + 1
     assert server.hub.now() == 10.0
     assert server.hub.source()["generation"] == generation + 1
+
+
+def test_envio_em_ritmo_fixo_desconta_o_trabalho():
+    # o envio anterior levou 13 ms: o próximo sai 250 ms depois do anterior, não 263 ms
+    assert server.next_tick(10.0, 10.013, 0.25) == 10.25
+    # sequência de passos: sem acumular atraso
+    deadline = 0.0
+    for i in range(1, 9):
+        deadline = server.next_tick(deadline, deadline + 0.02, 0.25)
+        assert abs(deadline - 0.25 * i) < 1e-9
+
+
+def test_envio_atrasado_recomeca_sem_rajada():
+    # travou 1 s: em vez de mandar 4 snapshots seguidos para "alcançar", recomeça de agora
+    assert server.next_tick(10.0, 11.0, 0.25) == 11.25

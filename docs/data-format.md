@@ -306,7 +306,7 @@ Um arquivo por piloto com todas as voltas que têm dados do carro, em JSON compr
 
 ## Modo ao vivo (fase 6)
 
-O backend local (`live/server.py`) não grava arquivos em `data/`: ele manda **snapshots** por WebSocket (`ws://127.0.0.1:8000/ws`), 4 vezes por segundo. Cada snapshot é o estado completo da sessão naquele instante, já normalizado (tipos em `web/src/types/live.ts`).
+O backend local (`live/server.py`) não grava arquivos em `data/`: ele manda **snapshots** por WebSocket (`ws://127.0.0.1:8000/ws`), 4 vezes por segundo, em ritmo fixo de 250 ms (o tempo de montar cada envio é descontado da espera). O site mostra cada snapshot no instante em que chega, ou chegada + atraso; guarda até 65 s de histórico para o atraso, mas só os últimos `atraso + 5 s` com a telemetria da volta. Cada snapshot é o estado completo da sessão naquele instante, já normalizado (tipos em `web/src/types/live.ts`).
 
 ```json
 {"type": "snapshot", "time": 1794163777.465,

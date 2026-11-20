@@ -49,41 +49,86 @@ export function loginUrl(liveUrl: string, from?: string): string | null {
   }
 }
 
+/** Atrasos oferecidos na aba Ao vivo (s), para sincronizar com a TV. */
+export const DELAY_OPTIONS = [0, 5, 10, 15, 20, 30, 45, 60] as const
+/** Folga além do atraso: o que fica guardado por inteiro e o que sobra no histórico. */
+export const DELAY_MARGIN_MS = 5000
+/** Histórico guardado: o maior atraso mais a folga (trocar o atraso não esvazia a tela). */
+const KEEP_MS = Math.max(...DELAY_OPTIONS) * 1000 + DELAY_MARGIN_MS
+
 /**
  * Guarda os snapshots recebidos para mostrá-los com atraso (sincronizar com a TV,
  * que costuma vir alguns segundos atrás do feed).
+ *
+ * Guarda `keepMs` de histórico, mas só os últimos `atraso + DELAY_MARGIN_MS` por inteiro: os mais
+ * antigos passam por `lighten` (no ao vivo, perdem a telemetria da volta, a parte pesada), porque
+ * só voltam à tela se o atraso aumentar.
  */
 export class DelayBuffer<T> {
-  private items: { at: number; value: T }[] = []
+  private items: { at: number; value: T; light: boolean }[] = []
   private keepMs: number
+  private lighten: ((value: T) => T) | null
 
-  constructor(keepMs = 125_000) {
+  constructor(keepMs = KEEP_MS, lighten: ((value: T) => T) | null = null) {
     this.keepMs = keepMs
+    this.lighten = lighten
   }
 
-  push(value: T, at: number): void {
-    this.items.push({ at, value })
+  push(value: T, at: number, delayMs = 0): void {
+    this.items.push({ at, value, light: false })
     const cutoff = at - this.keepMs
     let drop = 0
     while (drop < this.items.length - 1 && this.items[drop].at < cutoff) drop++
     if (drop) this.items.splice(0, drop)
+    if (this.lighten) {
+      // de trás para frente: para no primeiro já aliviado (os anteriores também estão)
+      const heavyFrom = at - delayMs - DELAY_MARGIN_MS
+      for (let i = this.items.length - 1; i >= 0; i--) {
+        const item = this.items[i]
+        if (item.at >= heavyFrom) continue
+        if (item.light) break
+        item.value = this.lighten(item.value)
+        item.light = true
+      }
+    }
   }
 
   /** Último valor recebido até `now - delayMs` (ou o mais antigo, se o atraso ainda não encheu). */
   at(now: number, delayMs: number): T | null {
     if (this.items.length === 0) return null
     const target = now - delayMs
-    let found: T | null = null
-    for (const item of this.items) {
-      if (item.at > target) break
-      found = item.value
+    for (let i = this.items.length - 1; i >= 0; i--) {
+      if (this.items[i].at <= target) return this.items[i].value
     }
-    return found ?? this.items[0].value
+    return this.items[0].value
+  }
+
+  /**
+   * Quando (no relógio de `now`) o próximo valor deve aparecer com este atraso; null se o mais
+   * novo já está na tela. Serve para mostrar cada snapshot no seu instante, sem relógio fixo.
+   */
+  nextAt(now: number, delayMs: number): number | null {
+    const target = now - delayMs
+    for (const item of this.items) {
+      if (item.at > target) return item.at + delayMs
+    }
+    return null
+  }
+
+  get size(): number {
+    return this.items.length
   }
 
   clear(): void {
     this.items = []
   }
+}
+
+/** Snapshot sem a telemetria da volta, para o histórico do atraso. */
+export function withoutTraces(snap: LiveSnapshot): LiveSnapshot {
+  if (snap.traces === undefined) return snap
+  const { traces: _traces, ...rest } = snap
+  return rest
 }
 
 /** Campos que o servidor só manda quando mudam. */
@@ -162,7 +207,8 @@ export function useLiveFeed(delayS: number) {
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null)
   const [catalog, setCatalog] = useState<LiveCatalog | null>(null)
   const lastKey = useRef<string | null>(null)
-  const buffer = useRef(new DelayBuffer<LiveSnapshot>())
+  const buffer = useRef(new DelayBuffer<LiveSnapshot>(undefined, withoutTraces))
+  const reschedule = useRef<() => void>(() => undefined)
   const sticky = useRef<StickyFields>(emptySticky())
   const socket = useRef<WebSocket | null>(null)
   const delayRef = useRef(delayS)
@@ -170,11 +216,29 @@ export function useLiveFeed(delayS: number) {
 
   useEffect(() => {
     delayRef.current = delayS
+    reschedule.current() // mudou o atraso: mostra já o instante certo e reagenda o próximo
   }, [delayS])
 
   useEffect(() => {
     let closed = false
     let retry = 0
+    // Cada snapshot aparece no seu instante (chegada + atraso). Sem atraso, na hora em que chega.
+    // Um relógio fixo de 250 ms contra envios de ~250–270 ms repetia um snapshot e pulava o seguinte,
+    // e os carros paravam meio segundo no mapa.
+    let timer = 0
+    const show = () => {
+      timer = 0
+      const now = Date.now()
+      const delayMs = delayRef.current * 1000
+      setSnapshot(buffer.current.at(now, delayMs))
+      const next = buffer.current.nextAt(now, delayMs)
+      if (next != null) timer = window.setTimeout(show, Math.max(0, next - now))
+    }
+    const restart = () => {
+      window.clearTimeout(timer)
+      show()
+    }
+    reschedule.current = restart
     const connect = () => {
       setStatus('connecting')
       const ws = new WebSocket(LIVE_URL)
@@ -192,12 +256,15 @@ export function useLiveFeed(delayS: number) {
           }
           const snap = msg
           const key = bufferKey(snap)
-          if (key !== lastKey.current) {
+          const changed = key !== lastKey.current
+          if (changed) {
             // trocou de sessão ou pulou na gravação: o atraso não deve mostrar o instante anterior
             buffer.current.clear()
             lastKey.current = key
           }
-          buffer.current.push(withSticky(snap, sticky.current), Date.now())
+          buffer.current.push(withSticky(snap, sticky.current), Date.now(), delayRef.current * 1000)
+          if (changed) restart()
+          else if (!timer) show()
         } catch {
           // mensagem inválida: ignora
         }
@@ -211,14 +278,11 @@ export function useLiveFeed(delayS: number) {
       }
     }
     connect()
-    // mostra o snapshot do momento (com atraso) 4 vezes por segundo
-    const tick = window.setInterval(() => {
-      setSnapshot(buffer.current.at(Date.now(), delayRef.current * 1000))
-    }, 250)
     return () => {
       closed = true
+      reschedule.current = () => undefined
       window.clearTimeout(retry)
-      window.clearInterval(tick)
+      window.clearTimeout(timer)
       socket.current?.close()
     }
   }, [])
