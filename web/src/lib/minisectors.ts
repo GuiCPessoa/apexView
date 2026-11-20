@@ -1,4 +1,5 @@
 import type { Lap, LapTelemetry } from '../types/data'
+import type { KeyValueStore } from './route'
 import { isValidLap } from './session'
 import { lapClock, similarColors, type LapClock } from './telemetry'
 
@@ -94,17 +95,55 @@ export function miniSectors(
   return { sectors, share, count, tieShare }
 }
 
-/** Pilotos padrão: os em foco e, completando até `max`, os donos das voltas mais rápidas. */
-export function defaultDrivers(focus: string[], laps: Lap[], available: string[], max = MAX_DRIVERS): string[] {
+/** Pilotos com que o cartão começa: os donos das duas voltas mais rápidas da sessão. */
+export const DEFAULT_DRIVERS = 2
+
+/** Pilotos padrão: os donos das voltas mais rápidas (válidas), entre os que têm telemetria. */
+export function defaultDrivers(laps: Lap[], available: string[], count = DEFAULT_DRIVERS): string[] {
   const best = new Map<string, number>()
   for (const l of laps) {
     if (!isValidLap(l) || !available.includes(l.driver)) continue
     const prev = best.get(l.driver)
     if (prev == null || l.lapTime! < prev) best.set(l.driver, l.lapTime!)
   }
-  const fastest = [...best.entries()].sort((a, b) => a[1] - b[1]).map(([d]) => d)
-  const pool = [...focus.filter((d) => available.includes(d)), ...fastest]
-  return [...new Set(pool)].slice(0, max)
+  return [...best.entries()]
+    .sort((a, b) => a[1] - b[1])
+    .slice(0, count)
+    .map(([d]) => d)
+}
+
+/** Escolha feita no cartão (pilotos e número de trechos), lembrada por sessão. */
+export interface MiniSectorsChoice {
+  drivers: string[]
+  n: number
+}
+
+const CHOICE_KEY = 'apexview:minisectors:'
+
+/**
+ * Escolha guardada para esta sessão, se ainda for válida (pilotos com telemetria, número de
+ * trechos conhecido); senão null (o cartão usa o padrão).
+ */
+export function loadChoice(path: string, available: string[], store: KeyValueStore | null): MiniSectorsChoice | null {
+  try {
+    const raw = store?.getItem(CHOICE_KEY + path)
+    if (!raw) return null
+    const v = JSON.parse(raw) as Partial<MiniSectorsChoice>
+    const drivers = Array.isArray(v.drivers) ? [...new Set(v.drivers.filter((d): d is string => typeof d === 'string' && available.includes(d)))] : []
+    if (drivers.length === 0 || !(SECTOR_COUNTS as readonly number[]).includes(v.n as number)) return null
+    return { drivers: drivers.slice(0, MAX_DRIVERS), n: v.n as number }
+  } catch {
+    return null
+  }
+}
+
+/** Guarda a escolha para a próxima vez que o cartão desta sessão abrir (trocar de tela e voltar). */
+export function saveChoice(path: string, choice: MiniSectorsChoice, store: KeyValueStore | null): void {
+  try {
+    store?.setItem(CHOICE_KEY + path, JSON.stringify(choice))
+  } catch {
+    // armazenamento bloqueado: a escolha vale só enquanto a tela estiver aberta
+  }
 }
 
 /** Mistura uma cor hex (#rrggbb) com branco: k = 0 mantém, 1 vira branco. */

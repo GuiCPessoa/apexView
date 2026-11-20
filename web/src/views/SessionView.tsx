@@ -113,7 +113,7 @@ function Dashboard({ path, meta, results, laps, tab }: DashboardProps) {
                 <PracticeResults results={results} laps={laps} focus={focus} onToggle={onToggle} />
               )}
             </Card>
-            <MiniSectorsPanel path={path} meta={meta} results={results} laps={laps} focus={focus} />
+            <MiniSectorsPanel path={path} meta={meta} results={results} laps={laps} />
             <Card title="Melhores voltas e setores" span={12} id="sectors">
               <SectorsTable results={results} laps={laps} focus={focus} onToggle={onToggle} />
             </Card>
@@ -160,7 +160,7 @@ function RaceCards({
       <Card title="Resultado" span={4} className="results-card" aside={<span className="muted">clique para focar</span>}>
         <RaceResults results={results} laps={laps} {...focusProps} />
       </Card>
-      <MiniSectorsPanel path={path} meta={meta} results={results} laps={laps} focus={focus} />
+      <MiniSectorsPanel path={path} meta={meta} results={results} laps={laps} />
       <Card title="Posições volta a volta" span={6} id="positions">
         <PositionsChart drivers={drivers} results={results} laps={laps} n={n} bands={bands} cursorLap={cursorLap} {...focusProps} />
       </Card>

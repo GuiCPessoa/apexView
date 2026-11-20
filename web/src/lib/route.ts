@@ -53,7 +53,8 @@ export interface KeyValueStore {
 const LAST_SESSION_KEY = 'apexview:last-session'
 const SESSION_PATH = /^\d{4}\/[\w.-]+\/[\w.-]+$/
 
-function browserStore(): KeyValueStore | null {
+/** sessionStorage da aba (null se o navegador bloquear). */
+export function browserStore(): KeyValueStore | null {
   try {
     return window.sessionStorage
   } catch {

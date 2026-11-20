@@ -8,10 +8,14 @@ import {
   TIE_S,
   defaultDrivers,
   driverColors,
+  loadChoice,
   miniSectors,
+  saveChoice,
   type MiniSector,
+  type MiniSectorsChoice,
 } from '../lib/minisectors'
 import { makeProjection } from '../lib/replay'
+import { browserStore } from '../lib/route'
 import { fastestLap } from '../lib/telemetry'
 import type { DriverResult, DriverTelemetry, Lap, LapTelemetry, SessionMeta, Track } from '../types/data'
 
@@ -20,7 +24,6 @@ interface Props {
   meta: SessionMeta
   results: DriverResult[]
   laps: Lap[]
-  focus: string[]
 }
 
 const TIE_COLOR = 'var(--tie)'
@@ -28,16 +31,22 @@ const pct = (x: number) => `${Math.round(x * 100)}%`
 const seconds = (x: number) => x.toFixed(3).replace('.', ',')
 
 /** Mini setores dominantes: a volta mais rápida de cada piloto, trecho a trecho, pintada no mapa. */
-export default function MiniSectorsPanel({ path, meta, results, laps, focus }: Props) {
+export default function MiniSectorsPanel({ path, meta, results, laps }: Props) {
   const available = meta.telemetry
-  const defaults = useMemo(() => defaultDrivers(focus, laps, available), [focus, laps, available])
-  // escolha manual vale até o foco mudar; aí volta ao padrão (ajuste no render, sem efeito)
-  const focusKey = focus.join(',')
-  const [picked, setPicked] = useState<{ focusKey: string; drivers: string[] } | null>(null)
-  const drivers = picked && picked.focusKey === focusKey ? picked.drivers : defaults
-  const setDrivers = (next: string[]) => setPicked({ focusKey, drivers: next })
-
-  const [n, setN] = useState<number>(DEFAULT_SECTORS)
+  // começa com os dois mais rápidos; o que a pessoa mudar fica guardado para esta sessão
+  // (sessionStorage), e volta igual depois de trocar de tela
+  const [choice, setChoice] = useState<MiniSectorsChoice>(
+    () => loadChoice(path, available, browserStore()) ?? { drivers: defaultDrivers(laps, available), n: DEFAULT_SECTORS },
+  )
+  const update = (next: Partial<MiniSectorsChoice>) => {
+    const value = { ...choice, ...next }
+    setChoice(value)
+    saveChoice(path, value, browserStore())
+  }
+  const drivers = choice.drivers
+  const n = choice.n
+  const setDrivers = (next: string[]) => update({ drivers: next })
+  const setN = (next: number) => update({ n: next })
   const [active, setActive] = useState<number | null>(null)
   const [track, setTrack] = useState<Track | null>(null)
   const [cache, setCache] = useState<Record<string, DriverTelemetry>>({})

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Lap, LapTelemetry } from '../types/data'
-import { defaultDrivers, driverColors, lighten, miniSectors, timeAt } from './minisectors'
+import { defaultDrivers, driverColors, lighten, loadChoice, miniSectors, saveChoice, timeAt } from './minisectors'
 import { lapClock } from './telemetry'
 
 /** Volta de 1000 m: `pace(x)` dá a velocidade (m/s) na fração x; amostras a cada `every` s. */
@@ -88,13 +88,37 @@ describe('defaultDrivers', () => {
   const lap = (driver: string, lapTime: number | null, deleted = false) => ({ driver, lap: 1, lapTime, deleted }) as Lap
   const laps = [lap('VER', 80), lap('HAM', 79, true), lap('HAM', 81), lap('LEC', 80.5), lap('NOR', 82), lap('PIA', null)]
 
-  it('pilotos em foco primeiro, completados pelas voltas mais rápidas', () => {
-    expect(defaultDrivers([], laps, ['VER', 'HAM', 'LEC', 'NOR'])).toEqual(['VER', 'LEC', 'HAM'])
-    expect(defaultDrivers(['NOR'], laps, ['VER', 'HAM', 'LEC', 'NOR'])).toEqual(['NOR', 'VER', 'LEC'])
+  it('começa com os dois donos das voltas mais rápidas (válidas)', () => {
+    expect(defaultDrivers(laps, ['VER', 'HAM', 'LEC', 'NOR'])).toEqual(['VER', 'LEC'])
   })
 
   it('só quem tem telemetria', () => {
-    expect(defaultDrivers(['PIA'], laps, ['VER', 'NOR'])).toEqual(['VER', 'NOR'])
+    expect(defaultDrivers(laps, ['NOR', 'PIA', 'HAM'])).toEqual(['HAM', 'NOR'])
+  })
+})
+
+describe('escolha lembrada', () => {
+  const memory = () => {
+    const data = new Map<string, string>()
+    return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) }
+  }
+
+  it('guarda e devolve por sessão', () => {
+    const store = memory()
+    saveChoice('2026/20-sao-paulo/Q', { drivers: ['NOR', 'RUS', 'LEC'], n: 50 }, store)
+    expect(loadChoice('2026/20-sao-paulo/Q', ['NOR', 'RUS', 'LEC'], store)).toEqual({ drivers: ['NOR', 'RUS', 'LEC'], n: 50 })
+    expect(loadChoice('2026/20-sao-paulo/R', ['NOR'], store)).toBeNull()
+  })
+
+  it('ignora pilotos sem telemetria e escolhas inválidas', () => {
+    const store = memory()
+    saveChoice('a', { drivers: ['NOR', 'XXX'], n: 25 }, store)
+    expect(loadChoice('a', ['NOR'], store)).toEqual({ drivers: ['NOR'], n: 25 })
+    store.setItem('apexview:minisectors:b', '{"drivers":["NOR"],"n":7}')
+    expect(loadChoice('b', ['NOR'], store)).toBeNull()
+    store.setItem('apexview:minisectors:c', 'não é json')
+    expect(loadChoice('c', ['NOR'], store)).toBeNull()
+    expect(loadChoice('a', ['NOR'], null)).toBeNull()
   })
 })
 
