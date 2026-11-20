@@ -1555,8 +1555,17 @@ table.compact .team-bar {
   background: var(--surface-2);
 }
 
-.live-car {
-  transition: transform 260ms linear;
+.track-wrap {
+  position: relative;
+}
+
+/* carros do mapa ao vivo: canvas por cima do SVG da pista, do mesmo tamanho */
+.cars-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: manipulation;
 }
 
 .trail-dot {
@@ -1697,7 +1706,10 @@ table.compact .team-bar {
   display: block;
   height: 100%;
   border-radius: 3px;
-  transition: width 240ms linear;
+  transform-origin: left center;
+  /* Sem animação e com transform (não width): animar a largura refazia o layout da página a cada
+     quadro e era o maior custo da aba Ao vivo (~75 ms por segundo da thread principal); até a
+     transição de transform custava ~30 ms/s. Os valores mudam 4 vezes por segundo, o que basta. */
 }
 
 .bar.rpm .bar-track span {

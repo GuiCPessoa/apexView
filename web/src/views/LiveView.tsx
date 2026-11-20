@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Card from '../components/Card'
+import CarsCanvas, { type CanvasCar } from '../components/CarsCanvas'
 import RaceControlFeed from '../components/RaceControlFeed'
 import WeatherPanel from '../components/WeatherPanel'
 import { formatLapTime, loadTrack } from '../lib/data'
@@ -562,9 +563,50 @@ function LiveMap({
   )
 
   const r = proj ? proj.size * 0.012 : 0
-  const cars = s.drivers
-    .filter((d) => d.x != null && d.y != null && !d.retired)
-    .sort((a, b) => Number(focus.includes(a.driver)) - Number(focus.includes(b.driver)))
+  const cars = useMemo<CanvasCar[]>(() => {
+    if (!proj) return []
+    return s.drivers
+      .filter((d) => d.x != null && d.y != null && !d.retired)
+      .sort((a, b) => Number(focus.includes(a.driver)) - Number(focus.includes(b.driver)))
+      .map((d) => {
+        const [x, y] = proj.project(d.x!, d.y!)
+        const on = focus.includes(d.driver)
+        return {
+          id: d.driver,
+          x,
+          y,
+          r,
+          color: d.teamColor ?? '#888',
+          focused: on,
+          dim: dimmed(focus, d.driver),
+          label: on || (d.position != null && d.position <= 3) ? d.driver : null,
+        }
+      })
+  }, [s.drivers, focus, proj, r])
+  const viewBox = useMemo(() => {
+    if (!proj) return null
+    const [x, y, w, h] = proj.viewBox.split(' ').map(Number)
+    return { x, y, w, h }
+  }, [proj])
+  // pista (ou rastro) desenhada uma vez: não muda a cada snapshot
+  const trackLayer = useMemo(() => {
+    if (!proj) return null
+    if (outline) {
+      const pts = outline.map(([x, y]) => proj.project(x, y).join(',')).join(' ')
+      return (
+        <>
+          <polygon points={pts} className="track-outer" strokeWidth={proj.size * 0.024} />
+          <polygon points={pts} className="track-inner" strokeWidth={proj.size * 0.006} />
+        </>
+      )
+    }
+    return points.map(([x, y], i) => {
+      const [px, py] = proj.project(x, y)
+      return <circle key={i} cx={px} cy={py} r={proj.size * 0.004} className="trail-dot" />
+    })
+    // no modo rastro, redesenha a cada ~50 pontos novos (como a projeção)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proj, outline, outline ? 0 : Math.floor(points.length / 50)])
 
   return (
     <Card
@@ -574,49 +616,15 @@ function LiveMap({
         s.trackStatus && <span className={`flag flag-${s.trackStatus}`}>{TRACK_STATUS_LABEL[s.trackStatus]}</span>
       }
     >
-      {!proj ? (
+      {!proj || !viewBox ? (
         <p className="muted loading">Esperando as posições dos carros…</p>
       ) : (
-        <svg viewBox={proj.viewBox} className="track-map" role="img" aria-label={`Traçado de ${s.session.circuit ?? ''}`}>
-          {outline ? (
-            <>
-              <polygon
-                points={outline.map(([x, y]) => proj.project(x, y).join(',')).join(' ')}
-                className="track-outer"
-                strokeWidth={proj.size * 0.024}
-              />
-              <polygon
-                points={outline.map(([x, y]) => proj.project(x, y).join(',')).join(' ')}
-                className="track-inner"
-                strokeWidth={proj.size * 0.006}
-              />
-            </>
-          ) : (
-            points.map(([x, y], i) => {
-              const [px, py] = proj.project(x, y)
-              return <circle key={i} cx={px} cy={py} r={proj.size * 0.004} className="trail-dot" />
-            })
-          )}
-          {cars.map((d) => {
-            const [x, y] = proj.project(d.x!, d.y!)
-            const on = focus.includes(d.driver)
-            return (
-              <g
-                key={d.driver}
-                className={`car live-car ${dimmed(focus, d.driver) ? 'dim' : ''}`}
-                style={{ transform: `translate(${x}px, ${y}px)` }}
-                onClick={() => onToggle(d.driver)}
-              >
-                <circle r={on ? r * 1.5 : r} fill={d.teamColor ?? '#888'} className={`car-dot ${on ? 'on' : ''}`} strokeWidth={r * 0.3} />
-                {(on || (d.position != null && d.position <= 3)) && (
-                  <text x={r * 2} y={-r * 1.4} className="car-label" fontSize={proj.size * 0.028}>
-                    {d.driver}
-                  </text>
-                )}
-              </g>
-            )
-          })}
-        </svg>
+        <div className="track-wrap">
+          <svg viewBox={proj.viewBox} className="track-map" role="img" aria-label={`Traçado de ${s.session.circuit ?? ''}`}>
+            {trackLayer}
+          </svg>
+          <CarsCanvas viewBox={viewBox} cars={cars} labelSize={proj.size * 0.028} onPick={onToggle} snapDistance={proj.size * 0.15} />
+        </div>
       )}
       {!outline && proj && <p className="foot">O traçado aparece depois que um carro completa uma volta limpa.</p>}
     </Card>
@@ -850,14 +858,15 @@ function LapTraces({ s, drivers, lapLength }: { s: LiveSnapshot; drivers: LiveDr
 }
 
 function Bar({ label, value, max, className, text }: { label: string; value: number | null; max: number; className: string; text: string }) {
-  const pct = value == null ? 0 : Math.max(0, Math.min(100, (value / max) * 100))
+  const fill = value == null ? 0 : Math.max(0, Math.min(1, value / max))
   return (
     <div className={`bar ${className}`}>
       <span className="bar-label">
         {label} <b>{text}</b>
       </span>
       <span className="bar-track">
-        <span style={{ width: `${pct}%` }} />
+        {/* escala em vez de largura: muda sem refazer o layout da página */}
+        <span style={{ transform: `scaleX(${fill})` }} />
       </span>
     </div>
   )
