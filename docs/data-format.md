@@ -327,7 +327,7 @@ O backend local (`live/server.py`) não grava arquivos em `data/`: ele manda **s
    "recording": "2026-20-r.jsonl.gz", "speed": 4, "paused": false, "elapsed": 6000.0, "duration": 9600.6, "generation": 3}}
 ```
 
-- `time` é o horário do feed (epoch UTC, s). As posições `x`, `y` (metros) são interpoladas 2 s atrás desse horário, para ficarem suaves entre as amostras; os canais do carro (`speed`, `gear`, `rpm`, `throttle`, `brake`, `drs`) usam o mesmo instante, para casar com o mapa.
+- `time` é o horário do feed (epoch UTC, s). Ao vivo, ele segue a hora da mensagem mais nova da F1 (avança no máximo 1 s sem mensagens e nunca volta, salvo numa ressincronia de mais de 2 s): os dados chegam ~3 s depois da hora real, e o relógio do computador faria o mapa pedir posições que ainda não chegaram. As posições `x`, `y` (metros) são interpoladas 2 s atrás desse horário, para ficarem suaves entre as amostras; os canais do carro (`speed`, `gear`, `rpm`, `throttle`, `brake`, `drs`) usam o mesmo instante, para casar com o mapa.
 - `gap` e `interval` são o texto do feed (`"+1.234"`, `"1 L"`, `"LAP 34"`); o front traduz. Na classificação vêm da diferença no segmento atual; nos treinos, da diferença para a melhor volta (`TimeDiffToFastest` e `TimeDiffToPositionAhead`).
 - `lastLap`, `bestLap` e `sectors` têm `best`: `"overall"` (roxo, melhor da sessão) ou `"personal"` (verde, melhor do piloto).
 - Cada item de `sectors` é `{"time", "best", "previous", "segments"}`: `time` é o tempo do setor nesta volta (`null` no meio dela), `previous` o da volta anterior e `segments` o status de cada mini setor oficial (`2048` amarelo, `2049` verde, `2051` roxo, `2064` box, `0` ainda não passou).

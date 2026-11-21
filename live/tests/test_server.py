@@ -188,3 +188,54 @@ def test_telemetria_da_volta_vai_uma_vez_por_segundo():
     assert server.traces_due(100.0, 101.0)
     # envio com um pouco de adiantamento não pula um segundo inteiro
     assert server.traces_due(100.0, 100.9)
+
+
+class _Mono:
+    """time.monotonic falso, para controlar o relógio do backend nos testes."""
+
+    def __init__(self) -> None:
+        self.t = 0.0
+
+    def __call__(self) -> float:
+        return self.t
+
+
+def _live_hub(monkeypatch):
+    mono = _Mono()
+    monkeypatch.setattr(server.time, "monotonic", mono)
+    hub = server.Hub()
+    hub.mode = "live"
+    return hub, mono
+
+
+def test_ao_vivo_o_relogio_segue_a_hora_do_feed(monkeypatch):
+    hub, mono = _live_hub(monkeypatch)
+    hub.feed_clock(100.0)
+    mono.t = 0.3
+    assert hub.now() == 100.3
+    # mensagem com hora um pouco antes do que já foi mostrado: o relógio segura, não volta
+    hub.feed_clock(100.2)
+    assert hub.now() == 100.3
+    mono.t = 0.7
+    assert abs(hub.now() - 100.6) < 1e-9
+    # mensagem mais velha que a última: ignorada
+    hub.feed_clock(99.0)
+    assert abs(hub.now() - 100.6) < 1e-9
+
+
+def test_ao_vivo_sem_mensagens_o_relogio_para_logo(monkeypatch):
+    hub, mono = _live_hub(monkeypatch)
+    hub.feed_clock(100.0)
+    mono.t = 10.0  # antes ia até 5 s à frente, como o relógio do computador
+    assert hub.now() == 100.0 + server.LIVE_EXTRAPOLATE_S
+
+
+def test_ao_vivo_ressincroniza_com_salto_grande(monkeypatch):
+    hub, mono = _live_hub(monkeypatch)
+    hub.feed_clock(1003.0)  # estado inicial, com a hora do computador
+    mono.t = 0.5
+    hub.now()
+    hub.feed_clock(1000.0)  # primeira mensagem da F1, ~3 s atrás
+    assert hub.now() == 1000.0
+    mono.t = 0.75
+    assert hub.now() == 1000.25

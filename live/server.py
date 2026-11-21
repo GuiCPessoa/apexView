@@ -47,6 +47,11 @@ from state import LiveState, parse_duration
 log = logging.getLogger("live")
 
 TICK_S = 0.25  # 4 snapshots por segundo
+# Ao vivo, o relógio segue a hora das mensagens da F1, e não a do computador: os dados chegam
+# ~3 s atrasados, e com o relógio do computador o mapa pedia posições que ainda não tinham
+# chegado (o carro parava e saltava 1 vez por segundo). Entre mensagens, anda no máximo isto:
+LIVE_EXTRAPOLATE_S = 1.0
+LIVE_RESYNC_S = 2.0  # salto maior que isto na hora do feed (conexão nova, reconexão): segue direto
 TRACES_EVERY_S = 1.0  # telemetria da volta (a parte pesada do snapshot): 1 vez por segundo
 LOGIN_RETRY_S = 5  # ao vivo sem conta conectada: tenta de novo a cada 5 s
 SPEEDS = (1, 2, 4, 8, 16, 32)
@@ -167,6 +172,7 @@ class Hub:
         # relógio da fonte: tempo do feed no último instante conhecido
         self._feed_time = 0.0
         self._mono = time.monotonic()
+        self._last_now = 0.0  # ao vivo, o relógio não anda para trás (só em saltos de ressincronia)
         self.speed = 1.0
         self.paused = False
         # replay
@@ -191,13 +197,29 @@ class Hub:
         if (replay and self.paused) or self._feed_time == 0:
             return self._feed_time
         elapsed = (time.monotonic() - self._mono) * (self.speed if replay else 1.0)
-        if self.mode == "live":
-            elapsed = min(elapsed, 5.0)  # sem mensagens novas, não extrapola demais
-        return self._feed_time + elapsed
+        if self.mode != "live":
+            return self._feed_time + elapsed
+        t = self._feed_time + min(elapsed, LIVE_EXTRAPOLATE_S)
+        # mensagem com horário um pouco antes do já mostrado: segura em vez de voltar
+        if self._last_now - LIVE_RESYNC_S < t < self._last_now:
+            t = self._last_now
+        self._last_now = t
+        return t
 
     def set_clock(self, t: float) -> None:
         self._feed_time = t
         self._mono = time.monotonic()
+        self._last_now = t
+
+    def feed_clock(self, t: float) -> None:
+        """Ao vivo: acompanha a hora da mensagem mais nova do feed. Horários mais antigos não
+        atrasam o relógio, a menos que o salto seja grande (ressincroniza, ex.: o estado inicial
+        vem com a hora do computador e as mensagens seguintes com a da F1, ~3 s antes)."""
+        if self._feed_time == 0 or t > self._feed_time or t < self._feed_time - LIVE_RESYNC_S:
+            self._feed_time = t
+            self._mono = time.monotonic()
+            if t < self._last_now - LIVE_RESYNC_S:
+                self._last_now = t
 
     def source(self) -> dict:
         info = {
@@ -253,7 +275,7 @@ async def run_live(record: bool, label: str = "ao-vivo") -> None:
                     if rec:
                         rec.write(msg)
                     hub.state.apply(msg)
-                    hub.set_clock(max(hub.now(), msg.time))
+                    hub.feed_clock(msg.time)
             except feed.TokenError as exc:
                 # sem conta conectada: espera o login pela página e tenta de novo sozinho
                 hub.error = str(exc)
