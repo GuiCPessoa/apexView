@@ -1,12 +1,13 @@
-import { memo, useMemo } from 'react'
+import { memo, useMemo, type ReactNode } from 'react'
 import { formatLapTime } from '../lib/data'
+import { winner } from '../lib/duel'
 import { dimmed } from '../lib/focus'
 import { formatLiveGap } from '../lib/live'
-import { decimal, dominanceCount, dominanceSpans, segmentClass, teamCode, windLabel } from '../lib/liveDisplay'
+import { decimal, dominanceCount, dominanceSpans, segmentClass, windLabel } from '../lib/liveDisplay'
 import type { Projection } from '../lib/replay'
-import { textOn } from '../lib/telemetry'
 import { COMPOUND } from '../lib/tyres'
-import type { LiveDominance, LiveDriver, LiveSector, LiveSnapshot, LiveSpeedTrap, LiveTimed } from '../types/live'
+import type { WeatherSample } from '../types/data'
+import type { LiveDominance, LiveDriver, LiveSector, LiveSnapshot, LiveTimed } from '../types/live'
 
 const bestClass = (best: 'overall' | 'personal' | null | undefined) => (best === 'overall' ? 'fastest' : best === 'personal' ? 'personal' : '')
 
@@ -26,345 +27,429 @@ function Segments({ s }: { s: LiveSector | null }) {
   )
 }
 
-/** Tempo do setor nesta volta; sem tempo ainda, o da volta anterior em cinza. */
-function SectorTime({ s, withPrevious }: { s: LiveSector | null; withPrevious?: boolean }) {
-  if (!s) return <span className="mono muted">—</span>
+/** Bloco da grade: título com a barrinha vermelha, um canto à direita e o conteúdo. */
+export function Box({
+  title,
+  aside,
+  className = '',
+  children,
+}: {
+  title: ReactNode
+  aside?: ReactNode
+  className?: string
+  children: ReactNode
+}) {
   return (
-    <span className="sec-time">
-      {s.time != null ? (
-        <span className={`mono ${bestClass(s.best) || 'not-best'}`}>{s.time.toFixed(3)}</span>
-      ) : (
-        <span className="mono muted">—</span>
-      )}
-      {withPrevious && s.previous != null && <small className="mono">{s.previous.toFixed(3)}</small>}
+    <section className={`lv-box ${className}`}>
+      <header className="lv-hd">
+        <h3>{title}</h3>
+        {aside != null && <span className="lv-aside">{aside}</span>}
+      </header>
+      {children}
+    </section>
+  )
+}
+
+function Tyre({ compound }: { compound: string | null }) {
+  const c = compound ? COMPOUND[compound] : null
+  if (!c) return <span className="muted">—</span>
+  return (
+    <span className={`tyre ${c.className}`} title={c.label}>
+      {c.letter}
     </span>
   )
 }
 
-// ---------- Clima ----------
-
-const ICONS = {
-  air: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round">
-      <path d="M14 14V4a2 2 0 0 0-4 0v10a4 4 0 1 0 4 0z" />
-    </svg>
-  ),
-  track: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="#fb923c" strokeWidth="2" strokeLinecap="round">
-      <path d="M14 14V4a2 2 0 0 0-4 0v10a4 4 0 1 0 4 0z" />
-    </svg>
-  ),
-  humidity: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinejoin="round">
-      <path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z" />
-    </svg>
-  ),
-  pressure: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round">
-      <path d="M4 16a8 8 0 1 1 16 0" />
-      <path d="M12 16l4-5" />
-    </svg>
-  ),
-  rain: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="#e5e7eb" strokeWidth="2" strokeLinecap="round">
-      <path d="M7 15a4 4 0 0 1 .5-8 5 5 0 0 1 9.5 1.5A3.5 3.5 0 0 1 17 15z" />
-      <path d="M9 18l-1 2M13 18l-1 2M17 18l-1 2" />
-    </svg>
-  ),
-}
-
 const num = (v: number | null | undefined, digits = 1) => (v == null ? '—' : v.toFixed(digits).replace('.', ','))
 
-/** Clima atual em 6 blocos pequenos. Só redesenha quando algum valor muda. */
-export const WeatherBlocks = memo(
-  function WeatherBlocks({ w }: { w: LiveSnapshot['weather'] }) {
-    const item = (icon: React.ReactNode, label: string, value: string, unit: string) => (
-      <div className="wx-item">
-        {icon}
-        <div>
-          <small>{label}</small>
-          <b>
-            {value}
-            {unit && <span>{unit}</span>}
-          </b>
-        </div>
-      </div>
-    )
-    // seta para onde o vento vai (o feed dá de onde ele vem)
-    const wind = (
-      <svg viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2" strokeLinejoin="round" style={{ transform: `rotate(${((w?.windDirection ?? 0) + 180) % 360}deg)` }}>
-        <path d="M12 3l5 16-5-4-5 4z" />
-      </svg>
-    )
-    return (
-      <div className="pw-blk">
-        <span className="pw-label">Clima</span>
-        {!w ? (
-          <p className="muted">Sem dados de clima ainda.</p>
-        ) : (
-          <div className="wx-grid">
-            {item(ICONS.air, 'Ar', num(w.airTemp), '°C')}
-            {item(ICONS.track, 'Pista', num(w.trackTemp), '°C')}
-            {item(ICONS.humidity, 'Umidade', num(w.humidity), '%')}
-            {item(wind, 'Vento', num(w.windSpeed), w.windDirection != null ? `m/s · ${windLabel(w.windDirection)}` : 'm/s')}
-            {item(ICONS.pressure, 'Pressão', num(w.pressure), 'hPa')}
-            {item(ICONS.rain, 'Chuva', w.rainfall ? 'Sim' : 'Não', '')}
-          </div>
-        )}
-      </div>
-    )
-  },
-  (a, b) => JSON.stringify(a.w) === JSON.stringify(b.w),
-)
+// ---------- B, C · pilotos em foco ----------
 
-// ---------- Coluna do piloto ----------
-
-function RpmGauge({ rpm, gear, color }: { rpm: number | null; gear: number | null; color: string }) {
-  const k = Math.max(0, Math.min(1, (rpm ?? 0) / 13000))
-  const R = 38
-  const cx = 46
-  const cy = 48
-  const at = (a: number) => `${(cx + R * Math.cos(a)).toFixed(1)},${(cy - R * Math.sin(a)).toFixed(1)}`
-  const arc = `M ${at(Math.PI)} A ${R} ${R} 0 0 1 ${at(0)}`
+/** Barra de 0 a 1 (escala, não largura: muda sem refazer o layout; o CSS anima entre snapshots). */
+function Meter({ k, className, color }: { k: number; className: string; color?: string }) {
   return (
-    <svg viewBox="0 0 92 56" className="rpm-gauge" aria-hidden="true">
-      <path d={arc} className="rpm-track" />
-      {/* arco fixo, preenchido pelo traço: o CSS anima o valor entre um snapshot e o seguinte */}
-      <path d={arc} pathLength={1} className="rpm-fill" style={{ stroke: color, strokeDashoffset: 1 - k, opacity: k > 0 ? 1 : 0 }} />
-      <text x={cx} y={cy - 2}>
-        {gear == null ? '—' : gear === 0 ? 'N' : gear}
-      </text>
-    </svg>
-  )
-}
-
-function SpeedTrap({ t }: { t: LiveSpeedTrap | null | undefined }) {
-  if (!t) return <span className="pw-mid muted">—</span>
-  return (
-    <span className={`pw-mid ${bestClass(t.best)}`}>
-      {t.value}
-      <small> km/h</small>
+    <span className="pedal-track">
+      <span className={`pedal-fill ${className}`} style={{ transform: `scaleX(${Math.max(0, Math.min(1, k))})`, background: color }} />
     </span>
   )
 }
 
 /**
- * Coluna de um piloto em foco: nome, posição e diferenças, voltas, setores, velocidade, motor,
- * pedais e pneu, cada um num bloco.
+ * Cartão de um piloto em foco, na cor dele: nome, posição, motor e pedais ao vivo e os números
+ * da volta (diferenças, última e melhor, pneu, máxima na reta).
  */
-export function DriverColumn({ d, slot, color, right }: { d: LiveDriver | null; slot: 'A' | 'B'; color: string; right?: boolean }) {
+export function DriverCard({ d, slot, color }: { d: LiveDriver | null; slot: 'A' | 'B'; color: string }) {
+  const area = slot === 'A' ? 'lv-drv-a' : 'lv-drv-b'
   if (!d) {
     return (
-      <div className="pw-col">
-        <div className="pw-blk">
-          <span className="pw-label">Piloto {slot}</span>
-          <p className="muted">Clique num piloto na torre ou no mapa.</p>
-        </div>
-      </div>
+      <Box title={`Piloto ${slot}`} className={`lv-drv ${area}`}>
+        <p className="muted">Clique num piloto na torre ou no mapa.</p>
+      </Box>
     )
   }
   const out = d.retired || d.stopped
   const leader = d.position === 1
-  const c = d.compound ? COMPOUND[d.compound] : null
-  const [first, ...rest] = (d.fullName ?? d.driver).split(' ')
+  const last = (d.fullName ?? d.driver).split(' ').slice(-1)[0]
   return (
-    <div className={`pw-col ${right ? 'right' : ''}`}>
-      <div className="pw-blk pw-head" style={{ borderTopColor: color }}>
-        <span className="pw-label">Piloto {slot}</span>
-        <div className="pw-name" style={{ color }}>
-          {first} {rest.join(' ')}
+    <section className={`lv-box lv-drv ${area}`} style={{ borderTopColor: color }}>
+      <div className="drv-top">
+        <div className="drv-id">
+          <div className="drv-name" style={{ color }}>
+            {last}
+          </div>
+          <div className="drv-team">
+            #{d.number} · {d.team}
+            {d.inPit && <span className="pit-badge">BOX</span>}
+            {d.pitOut && !d.inPit && <span className="pit-badge out">SAÍDA</span>}
+          </div>
         </div>
-        <div className="pw-sub">
-          <span className="pw-num" style={{ background: d.teamColor ?? '#888', color: textOn(d.teamColor ?? '#888888') }}>
-            {d.number}
+        <div className="drv-pos">
+          <span className="drv-slot" style={{ background: color }}>
+            {slot}
           </span>
-          {d.team}
-          {d.inPit && <span className="pit-badge">BOX</span>}
-          {d.pitOut && !d.inPit && <span className="pit-badge out">SAÍDA</span>}
+          {out ? <span className="drv-out">{d.retired ? 'Abandono' : 'Parado'}</span> : `P${d.position ?? '—'}`}
         </div>
       </div>
-      <div className="pw-pair">
-        <div className="pw-blk">
-          <span className="pw-label">Posição</span>
-          <div className="pw-big">{d.position ?? '—'}</div>
+      <div className="drv-live">
+        <div className="drv-speed">
+          <b>{d.speed ?? '—'}</b>
+          <small>km/h · marcha {d.gear == null ? '—' : d.gear === 0 ? 'N' : d.gear}</small>
         </div>
-        <div className="pw-blk">
-          <span className="pw-label">{leader ? 'Líder' : 'Para o líder'}</span>
-          <div className="pw-mid mono">{out ? (d.retired ? 'Abandono' : 'Parado') : leader ? '—' : decimal(formatLiveGap(d.gap))}</div>
-          <span className="pw-label pw-label-gap">Intervalo</span>
-          <div className="mono muted">{leader ? '—' : decimal(formatLiveGap(d.interval))}</div>
+        <div className="drv-meters">
+          <span>RPM</span>
+          <Meter k={(d.rpm ?? 0) / 13000} className="rpm" color={color} />
+          <span>Acel.</span>
+          <Meter k={(d.throttle ?? 0) / 100} className="throttle" />
+          <span>Freio</span>
+          <Meter k={d.brake ? 1 : 0} className="brake" />
         </div>
+        <span className={`drs-chip ${d.drs ? 'on' : ''}`}>DRS</span>
       </div>
-      <div className="pw-blk">
-        <span className="pw-label">{d.laps != null ? `Volta ${d.laps + 1}` : 'Volta'}</span>
-        <div className="pw-laps">
-          <span className="pw-label">Última</span>
-          <span className="pw-label">Melhor</span>
+      <div className="drv-kv">
+        <div>
+          <span className="lbl">Líder</span>
+          <b className="mono">{leader || out ? '—' : decimal(formatLiveGap(d.gap))}</b>
+        </div>
+        <div>
+          <span className="lbl">Int.</span>
+          <b className="mono">{leader || out ? '—' : decimal(formatLiveGap(d.interval))}</b>
+        </div>
+        <div>
+          <span className="lbl">Pneu</span>
+          <b>
+            <Tyre compound={d.compound} /> <span className="mono">{d.tyreAge ?? ''}</span>
+            <small className="muted"> · {d.pits ?? 0}p</small>
+          </b>
+        </div>
+        <div>
+          <span className="lbl">Última</span>
           <b>
             <Timed t={d.lastLap} />
           </b>
+        </div>
+        <div>
+          <span className="lbl">Melhor</span>
           <b>
             <Timed t={d.bestLap} />
           </b>
         </div>
-      </div>
-      <div className="pw-blk">
-        <span className="pw-label">Setores</span>
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="pw-sector">
-            <span className="muted">S{i + 1}</span>
-            <Segments s={d.sectors[i] ?? null} />
-            <SectorTime s={d.sectors[i] ?? null} />
-          </div>
-        ))}
-      </div>
-      <div className="pw-pair">
-        <div className="pw-blk">
-          <span className="pw-label">Velocidade</span>
-          <span className="pw-mid">
-            {d.speed ?? '—'}
-            <small> km/h</small>
-          </span>
-        </div>
-        <div className="pw-blk">
-          <span className="pw-label">Máx. na reta</span>
-          <SpeedTrap t={d.topSpeed} />
+        <div>
+          <span className="lbl">Reta</span>
+          <b className={`mono ${bestClass(d.topSpeed?.best)}`}>{d.topSpeed ? d.topSpeed.value : '—'}</b>
         </div>
       </div>
-      <div className="pw-blk">
-        <span className="pw-label">Motor</span>
-        <div className="pw-gauge">
-          <RpmGauge rpm={d.rpm} gear={d.gear} color={color} />
-          <div>
-            <div className="pw-mid">{d.rpm != null ? d.rpm.toLocaleString('pt-BR') : '—'}</div>
-            <span className="muted pw-small">RPM · marcha {d.gear == null ? '—' : d.gear === 0 ? 'N' : d.gear}</span>
-          </div>
-        </div>
-      </div>
-      <div className="pw-blk">
-        <div className="pw-blk-head">
-          <span className="pw-label">Pedais</span>
-          <span className={`drs-chip ${d.drs ? 'on' : ''}`}>DRS</span>
-        </div>
-        <div className="pedal">
-          Acelerador
-          <span className="pedal-track">
-            {/* escala, não largura: muda sem refazer o layout da página */}
-            <span className="pedal-fill throttle" style={{ transform: `scaleX(${Math.max(0, Math.min(1, (d.throttle ?? 0) / 100))})` }} />
-          </span>
-          <b>{d.throttle != null ? `${d.throttle}%` : '—'}</b>
-        </div>
-        <div className="pedal">
-          Freio
-          <span className="pedal-track">
-            <span className="pedal-fill brake" style={{ transform: `scaleX(${d.brake ? 1 : 0})` }} />
-          </span>
-          <b>{d.brake ? 'sim' : 'não'}</b>
-        </div>
-      </div>
-      <div className="pw-blk">
-        <span className="pw-label">Pneu</span>
-        <div className="pw-tyre">
-          <span className={`tyre-ring ${c?.className ?? ''}`}>{c?.letter ?? '?'}</span>
-          <div>
-            <div className="pw-mid">{d.tyreAge != null ? `${d.tyreAge} ${d.tyreAge === 1 ? 'volta' : 'voltas'}` : '—'}</div>
-            <span className="muted pw-small">
-              {c?.label.toLowerCase() ?? 'composto desconhecido'}
-              {d.pits != null ? ` · ${d.pits} ${d.pits === 1 ? 'parada' : 'paradas'}` : ''}
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
+    </section>
   )
 }
 
-// ---------- Torre ----------
+// ---------- D · torre ----------
 
 /** Tudo o que a linha mostra: se não mudou, a linha não é redesenhada. */
 function rowKey(d: LiveDriver): string {
   const t = (x: LiveTimed | null) => (x ? `${x.time}${x.best ?? ''}` : '')
-  const s = d.sectors.map((x) => (x ? `${x.time}${x.best ?? ''}${x.previous}${x.segments.join('')}` : '')).join('|')
+  const s = d.sectors.map((x) => (x ? `${x.time}${x.best ?? ''}${x.segments.join('')}` : '')).join('|')
   return [
-    d.position, d.team, d.teamColor, d.gap, d.interval, t(d.lastLap), t(d.bestLap), s, d.inPit, d.pitOut,
+    d.position, d.team, d.teamColor, d.gap, d.interval, t(d.lastLap), s, d.inPit, d.pitOut,
     d.retired, d.stopped, d.knockedOut, d.compound, d.tyreAge,
   ].join(';')
 }
 
 const TowerRow = memo(
-  function TowerRow({ d, focused, dim, onToggle }: { d: LiveDriver; focused: boolean; dim: boolean; onToggle: (d: string) => void }) {
+  function TowerRow({ d, slot, dim, onToggle }: { d: LiveDriver; slot: 'A' | 'B' | null; dim: boolean; onToggle: (d: string) => void }) {
     const out = d.retired || d.stopped
-    const c = d.compound ? COMPOUND[d.compound] : null
     const leader = d.position === 1
+    const close = !leader && !out && /^\+?0\.\d+$/.test(d.interval ?? '')
+    const color = d.teamColor ?? '#888'
     return (
-      <tr className={`${focused ? 'focused' : ''} ${dim ? 'dim' : ''} ${out || d.knockedOut ? 'out' : ''}`} onClick={() => onToggle(d.driver)}>
-        <td className="lt-pos">{d.position ?? ''}</td>
-        <td className="lt-team">
-          <span className="team-chip" style={{ background: d.teamColor ?? '#888', color: textOn(d.teamColor ?? '#888888') }}>
-            {teamCode(d.team)}
-          </span>
-        </td>
-        <td className="lt-driver">
+      <tr className={`${slot ? 'focused' : ''} ${dim ? 'dim' : ''} ${out || d.knockedOut ? 'out' : ''}`} onClick={() => onToggle(d.driver)}>
+        <td className="t-pos">{out ? '—' : (d.position ?? '')}</td>
+        <td className="t-drv">
+          <i style={{ background: color }} />
           {d.driver}
+          {slot && (
+            <span className="t-slot" style={{ background: color }}>
+              {slot}
+            </span>
+          )}
           {d.inPit && <span className="pit-badge">BOX</span>}
           {d.pitOut && !d.inPit && <span className="pit-badge out">SAÍDA</span>}
         </td>
-        <td className="lt-gap mono">{out ? (d.retired ? 'Abandono' : 'Parado') : leader ? '—' : decimal(formatLiveGap(d.gap))}</td>
-        <td className="lt-gap mono lt-int">{leader || out ? '—' : decimal(formatLiveGap(d.interval))}</td>
-        <td className="lt-lap">
-          <Timed t={d.lastLap} />
+        <td className="t-gap mono">
+          {close && <span className="t-drs">DRS</span>}
+          {leader || out ? '' : decimal(formatLiveGap(d.interval))}
         </td>
-        <td className="lt-lap lt-best">
-          <Timed t={d.bestLap} />
+        <td className="t-gap mono">{out ? (d.retired ? 'Abandono' : 'Parado') : leader ? 'Líder' : decimal(formatLiveGap(d.gap))}</td>
+        <td className="t-lap">{!out && <Timed t={d.lastLap} />}</td>
+        <td className="t-secs">
+          {[0, 1, 2].map((i) => (
+            <Segments key={i} s={d.sectors[i] ?? null} />
+          ))}
         </td>
-        {[0, 1, 2].map((i) => (
-          <td key={i} className="lt-sec">
-            <Segments s={d.sectors[i] ?? null} />
-            <SectorTime s={d.sectors[i] ?? null} withPrevious />
-          </td>
-        ))}
-        <td className="lt-tyre">
-          {c && !out && (
-            <span title={`${c.label}${d.tyreAge != null ? `, ${d.tyreAge} voltas` : ''}`}>
-              <span className={`tyre ${c.className}`}>{c.letter}</span> <span className="muted">{d.tyreAge ?? ''}</span>
-            </span>
+        <td className="t-tyre">
+          {!out && d.compound && (
+            <>
+              <Tyre compound={d.compound} /> <span className="muted">{d.tyreAge ?? ''}</span>
+            </>
           )}
         </td>
       </tr>
     )
   },
-  (a, b) => a.focused === b.focused && a.dim === b.dim && a.onToggle === b.onToggle && rowKey(a.d) === rowKey(b.d),
+  (a, b) => a.slot === b.slot && a.dim === b.dim && a.onToggle === b.onToggle && rowKey(a.d) === rowKey(b.d),
 )
 
-/** Torre de tempos em largura total: diferenças, voltas, setores com mini setores e pneu. */
-export function LiveTower({ drivers, focus, onToggle }: { drivers: LiveDriver[]; focus: string[]; onToggle: (d: string) => void }) {
+/** Torre de tempos compacta: cabem os 22 pilotos na coluna da direita sem rolar. */
+export function LiveTower({
+  drivers,
+  focus,
+  pair,
+  onToggle,
+}: {
+  drivers: LiveDriver[]
+  focus: string[]
+  pair: [string | null, string | null]
+  onToggle: (d: string) => void
+}) {
   return (
-    <div className="table-wrap live-tower-wrap">
-      <table className="live-tower-table">
+    <div className="lv-scroll">
+      <table className="lv-tower">
         <thead>
           <tr>
-            <th className="lt-pos">Pos</th>
-            <th className="lt-team" aria-label="Equipe" />
-            <th className="lt-driver">Piloto</th>
-            <th className="lt-gap">Líder</th>
-            <th className="lt-gap lt-int">Intervalo</th>
-            <th className="lt-lap">Última</th>
-            <th className="lt-lap lt-best">Melhor</th>
-            <th className="lt-sec">Setor 1</th>
-            <th className="lt-sec">Setor 2</th>
-            <th className="lt-sec">Setor 3</th>
-            <th className="lt-tyre">Pneu</th>
+            <th className="t-pos">P</th>
+            <th className="t-drv">Piloto</th>
+            <th className="t-gap">Int.</th>
+            <th className="t-gap">Líder</th>
+            <th className="t-lap">Última</th>
+            <th className="t-secs">Setores</th>
+            <th className="t-tyre">Pneu</th>
           </tr>
         </thead>
         <tbody>
           {drivers.map((d) => (
-            <TowerRow key={d.driver} d={d} focused={focus.includes(d.driver)} dim={dimmed(focus, d.driver)} onToggle={onToggle} />
+            <TowerRow
+              key={d.driver}
+              d={d}
+              slot={d.driver === pair[0] ? 'A' : d.driver === pair[1] ? 'B' : null}
+              dim={dimmed(focus, d.driver)}
+              onToggle={onToggle}
+            />
           ))}
         </tbody>
       </table>
     </div>
   )
 }
+
+// ---------- F · duelo ----------
+
+const SPARK_W = 240
+const SPARK_H = 64
+
+/** Diferença entre os dois pilotos nas últimas voltas (B atrás de A = positivo). */
+function DuelSpark({ series, color }: { series: [number, number][]; color: string }) {
+  if (series.length < 2) return <p className="muted lv-note">A tendência aparece depois de duas voltas dos dois.</p>
+  const vals = series.map((p) => p[1])
+  const lo = Math.min(0, ...vals)
+  const hi = Math.max(1.2, ...vals)
+  const x = (i: number) => 4 + (i * (SPARK_W - 8)) / (series.length - 1)
+  const y = (v: number) => 4 + (1 - (v - lo) / (hi - lo)) * (SPARK_H - 16)
+  const path = series.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join('')
+  const drs = hi >= 1 && lo <= 1 ? y(1) : null
+  return (
+    <svg className="duel-spark" viewBox={`0 0 ${SPARK_W} ${SPARK_H}`} preserveAspectRatio="none" aria-hidden="true">
+      {drs != null && <line x1="0" x2={SPARK_W} y1={drs} y2={drs} className="duel-drs" />}
+      {lo < 0 && <line x1="0" x2={SPARK_W} y1={y(0)} y2={y(0)} className="duel-zero" />}
+      <path d={path} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
+}
+
+const sec = (s: LiveSector | null | undefined) => s?.time ?? s?.previous ?? null
+
+/** Novo: os dois pilotos em foco lado a lado: diferença, tendência e quem vence em cada parte da volta. */
+export function DuelBox({
+  a,
+  b,
+  colors,
+  gap,
+  series,
+  isRace,
+}: {
+  a: LiveDriver | null
+  b: LiveDriver | null
+  colors: [string, string]
+  gap: number | null
+  series: [number, number][]
+  isRace: boolean
+}) {
+  if (!a || !b) {
+    return (
+      <Box title="Duelo" className="lv-duel">
+        <p className="muted">Escolha dois pilotos para comparar.</p>
+      </Box>
+    )
+  }
+  const [ca, cb] = colors
+  const trend = series.length >= 2 ? series[series.length - 1][1] - series[0][1] : null
+  const ahead = gap == null ? null : gap >= 0 ? a : b
+  const row = (k: string, va: number | null | undefined, vb: number | null | undefined, fmt: (v: number) => string, higher = false) => {
+    const w = winner(va, vb, higher)
+    return (
+      <tr key={k}>
+        <td className={w === 'a' ? 'win' : 'muted'} style={w === 'a' ? { color: ca } : undefined}>
+          {va == null ? '—' : fmt(va)}
+        </td>
+        <td className="k">{k}</td>
+        <td className={w === 'b' ? 'win' : 'muted'} style={w === 'b' ? { color: cb } : undefined}>
+          {vb == null ? '—' : fmt(vb)}
+        </td>
+      </tr>
+    )
+  }
+  const s3 = (v: number) => v.toFixed(3)
+  return (
+    <Box title="Duelo" className="lv-duel" aside={isRace ? 'na pista' : 'na melhor volta'}>
+      <div className="duel-vs">
+        <span style={{ color: ca }}>
+          {a.driver} <em>P{a.position ?? '—'}</em>
+        </span>
+        <em>×</em>
+        <span style={{ color: cb }}>
+          <em>P{b.position ?? '—'}</em> {b.driver}
+        </span>
+      </div>
+      <div className="duel-gap mono">
+        {gap == null ? '—' : s3(Math.abs(gap))}
+        <small> s</small>
+      </div>
+      <div className="duel-sub">
+        {gap == null ? (
+          'sem diferença em tempo (volta de atraso ou sem volta)'
+        ) : (
+          <>
+            <b style={{ color: ahead === a ? ca : cb }}>{ahead?.driver}</b> na frente
+            {isRace && trend != null && Math.abs(trend) >= 0.05 && (
+              <>
+                {' · '}
+                <span className={trend < 0 ? 'up' : 'down'}>
+                  {trend < 0 ? '▼' : '▲'} {s3(Math.abs(trend))} s em {series.length - 1} {series.length - 1 === 1 ? 'volta' : 'voltas'}
+                </span>
+              </>
+            )}
+          </>
+        )}
+      </div>
+      {isRace && <DuelSpark series={series} color={cb} />}
+      <table className="duel-table">
+        <tbody>
+          {row('Última', a.lastLap?.time, b.lastLap?.time, formatLapTime)}
+          {!isRace && row('Melhor', a.bestLap?.time, b.bestLap?.time, formatLapTime)}
+          {row('S1', sec(a.sectors[0]), sec(b.sectors[0]), s3)}
+          {row('S2', sec(a.sectors[1]), sec(b.sectors[1]), s3)}
+          {row('S3', sec(a.sectors[2]), sec(b.sectors[2]), s3)}
+          {row('Reta', a.topSpeed?.value, b.topSpeed?.value, String, true)}
+          <tr>
+            <td>
+              <Tyre compound={a.compound} /> {a.tyreAge ?? ''}
+            </td>
+            <td className="k">Pneu</td>
+            <td>
+              {b.tyreAge ?? ''} <Tyre compound={b.compound} />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </Box>
+  )
+}
+
+// ---------- G · clima ----------
+
+const WX_W = 260
+const WX_H = 48
+
+/** Clima atual e a curva da temperatura da pista na sessão. Só redesenha quando algo muda. */
+export const WeatherBox = memo(function WeatherBox({ w, history }: { w: LiveSnapshot['weather']; history: WeatherSample[] }) {
+  const line = useMemo(() => {
+    const pts = history.filter((p) => p.trackTemp != null)
+    if (pts.length < 2) return null
+    const t0 = pts[0].time
+    const t1 = pts[pts.length - 1].time
+    const vals = pts.map((p) => p.trackTemp!)
+    const lo = Math.min(...vals) - 0.3
+    const hi = Math.max(...vals) + 0.3
+    return pts
+      .map((p, i) => `${i ? 'L' : 'M'}${(((p.time - t0) / (t1 - t0 || 1)) * WX_W).toFixed(1)},${(WX_H - 3 - ((p.trackTemp! - lo) / (hi - lo)) * (WX_H - 8)).toFixed(1)}`)
+      .join('')
+  }, [history])
+  return (
+    <Box title="Clima" className="lv-wx" aside={w ? (w.rainfall ? 'chovendo' : 'sem chuva') : undefined}>
+      {!w ? (
+        <p className="muted">Sem dados de clima ainda.</p>
+      ) : (
+        <>
+          <div className="wx-2">
+            <div>
+              <span className="lbl">Pista</span>
+              <b>
+                {num(w.trackTemp)}
+                <span>°C</span>
+              </b>
+            </div>
+            <div>
+              <span className="lbl">Ar</span>
+              <b>
+                {num(w.airTemp)}
+                <span>°C</span>
+              </b>
+            </div>
+            <div>
+              <span className="lbl">Umidade</span>
+              <b>
+                {num(w.humidity, 0)}
+                <span>%</span>
+              </b>
+            </div>
+            <div>
+              <span className="lbl">Vento</span>
+              <b>
+                {w.windSpeed == null ? '—' : Math.round(w.windSpeed * 3.6)}
+                <span>km/h{w.windDirection != null ? ` ${windLabel(w.windDirection)}` : ''}</span>
+              </b>
+            </div>
+          </div>
+          {line && (
+            <div className="wx-curve">
+              <span className="lbl">Temperatura da pista na sessão</span>
+              <svg viewBox={`0 0 ${WX_W} ${WX_H}`} preserveAspectRatio="none" aria-hidden="true">
+                <path d={line} fill="none" stroke="#f59e0b" strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+              </svg>
+            </div>
+          )}
+        </>
+      )}
+    </Box>
+  )
+})
 
 // ---------- Domínio da pista ----------
 
@@ -437,7 +522,7 @@ export const DominanceMap = memo(function DominanceMap({ outline, proj, dominanc
             </span>
           </div>
         ))}
-        {ranking.length > 6 && <span className="muted pw-small">+ {ranking.length - 6} pilotos com menos mini setores</span>}
+        {ranking.length > 6 && <span className="muted lv-note">+ {ranking.length - 6} pilotos com menos mini setores</span>}
       </div>
       <div className="dom-strip" aria-hidden="true">
         {dominance.owners.map((o, i) => (

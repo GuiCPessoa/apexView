@@ -3,8 +3,8 @@ import Card from '../components/Card'
 import CarsCanvas, { type CanvasCar } from '../components/CarsCanvas'
 import RaceControlFeed from '../components/RaceControlFeed'
 import TraceCanvas from '../components/TraceCanvas'
-import WeatherPanel from '../components/WeatherPanel'
 import { loadTrack } from '../lib/data'
+import { LapGaps, duelGap } from '../lib/duel'
 import { dimmed, telemetryPair, toggleFocus } from '../lib/focus'
 import {
   DELAY_OPTIONS,
@@ -20,8 +20,8 @@ import {
 import { similarColors } from '../lib/telemetry'
 import { TRACK_STATUS_LABEL, formatClock, makeProjection } from '../lib/replay'
 import { liveDriverColors } from '../lib/liveDisplay'
-import { DominanceMap, DriverColumn, LiveTower, WeatherBlocks } from '../panels/LivePanels'
-import type { DataIndex, RaceControlMessage, Track } from '../types/data'
+import { Box, DominanceMap, DriverCard, DuelBox, LiveTower, WeatherBox } from '../panels/LivePanels'
+import type { DataIndex, RaceControlMessage, Track, WeatherSample } from '../types/data'
 import type { LiveAccount, LiveCatalog, LiveDriver, LiveScheduled, LiveSnapshot } from '../types/live'
 
 
@@ -29,7 +29,6 @@ import type { LiveAccount, LiveCatalog, LiveDriver, LiveScheduled, LiveSnapshot 
 const localTime = (epoch: number, seconds: boolean) =>
   new Date(epoch * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}) })
 const messageTime = (m: RaceControlMessage) => localTime(m.time, true)
-const axisTime = (epoch: number) => localTime(epoch, false)
 const SPEEDS = [1, 4, 16, 32]
 
 const START_HELP = `cd live && source .venv/bin/activate
@@ -87,6 +86,13 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
     [colorKey],
   )
 
+  // diferença de cada piloto para o líder em cada volta, para a tendência do duelo (zera ao trocar de sessão)
+  const sessionKey = snapshot ? sourceKey(snapshot) : ''
+  const lapGaps = useMemo(() => (sessionKey ? new LapGaps() : null), [sessionKey])
+  useEffect(() => {
+    if (snapshot && lapGaps) lapGaps.record(snapshot.drivers)
+  }, [snapshot, lapGaps])
+
   if (!snapshot) return <Offline status={status} />
 
   const s = snapshot
@@ -115,6 +121,56 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
   const colorBRaw = (driverB && colors.get(driverB.driver)) ?? '#8b8b97'
   const colorB = driverA && driverB && similarColors(colorA, colorBRaw) ? '#ececf0' : colorBRaw
 
+  const sessionBox = (
+    <section className={`lv-box lv-ses ${hasSession ? '' : 'lv-solo'}`}>
+      <span className="lv-kicker">
+        {replay ? <span className="live-badge sim">Simulação</span> : <span className="live-badge">Ao vivo</span>}
+        {hasSession ? (SESSION_NAME[s.session.name ?? ''] ?? s.session.name) : ''}
+      </span>
+      <h1>{s.session.meeting ?? (idle ? 'Escolha uma sessão' : 'Sem sessão no momento')}</h1>
+      <p className="lv-sub">
+        {hasSession
+          ? [s.session.circuit, s.session.country, statusLabel(s.session.status)].filter(Boolean).join(' · ')
+          : idle
+            ? 'Nenhuma gravação ainda. Escolha abaixo uma sessão do arquivo da F1 para simular.'
+            : 'O feed está conectado, mas nenhuma sessão está acontecendo agora.'}
+      </p>
+      {s.source.mode !== 'live' && s.source.nextLive && <NextLive next={s.source.nextLive} />}
+      <div className="lv-ses-row">
+        {isRace && s.lap.current != null ? (
+          <div>
+            <span className="lbl">Volta</span>
+            <div className="lv-lap">
+              {s.lap.current}
+              <small>/{s.lap.total ?? '—'}</small>
+            </div>
+          </div>
+        ) : (
+          s.clock?.remaining != null && (
+            <div>
+              <span className="lbl">{s.clock.running ? 'Tempo restante' : 'Relógio parado'}</span>
+              <div className="lv-lap">{formatClock(s.clock.remaining)}</div>
+            </div>
+          )
+        )}
+        <div className="lv-ses-meta">
+          {s.trackStatus && <span className={`flag flag-${s.trackStatus}`}>{TRACK_STATUS_LABEL[s.trackStatus]}</span>}
+          <label className="lv-delay">
+            Atraso
+            <select value={delay} onChange={(e) => setDelay(Number(e.target.value))} aria-label="Atraso para sincronizar com a TV">
+              {DELAY_OPTIONS.map((d) => (
+                <option key={d} value={d}>
+                  {d === 0 ? 'nenhum' : `${d} s`}
+                </option>
+              ))}
+            </select>
+          </label>
+          {account && <AccountLine account={account} now={now} />}
+        </div>
+      </div>
+    </section>
+  )
+
   return (
     <section className="live">
       {s.source.error && !(accountOff && s.source.error.startsWith(TOKEN_MISSING_PREFIX)) && (
@@ -123,61 +179,7 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
       {s.source.loading && <DownloadNotice loading={s.source.loading} />}
       {status !== 'open' && <p className="notice warn">Conexão com o backend perdida; reconectando…</p>}
 
-      <div className="pw-top">
-        <div className="pw-blk pw-title">
-          <span className="kicker">
-            {replay ? <span className="live-badge sim">Simulação</span> : <span className="live-badge">Ao vivo</span>}{' '}
-            {hasSession ? (SESSION_NAME[s.session.name ?? ''] ?? s.session.name) : ''}
-          </span>
-          <h1>{s.session.meeting ?? (idle ? 'Escolha uma sessão' : 'Sem sessão no momento')}</h1>
-          <p>
-            {hasSession
-              ? [s.session.circuit, s.session.country, statusLabel(s.session.status)].filter(Boolean).join(' · ')
-              : idle
-                ? 'Nenhuma gravação ainda. Escolha abaixo uma sessão do arquivo da F1 para simular.'
-                : 'O feed está conectado, mas nenhuma sessão está acontecendo agora.'}
-          </p>
-          {s.source.mode !== 'live' && s.source.nextLive && <NextLive next={s.source.nextLive} />}
-        </div>
-        {isRace && s.lap.current != null && (
-          <div className="stat">
-            <span className="stat-label">Volta</span>
-            <span className="stat-value">{`${s.lap.current}/${s.lap.total ?? '—'}`}</span>
-            <span className="stat-sub">{s.clock?.remaining != null ? `${formatClock(s.clock.remaining)} restantes` : ''}</span>
-          </div>
-        )}
-        {!isRace && s.clock?.remaining != null && (
-          <div className="stat">
-            <span className="stat-label">Tempo restante</span>
-            <span className="stat-value">{formatClock(s.clock.remaining)}</span>
-            <span className="stat-sub">{s.clock.running ? 'relógio correndo' : 'relógio parado'}</span>
-          </div>
-        )}
-        {s.trackStatus && (
-          <div className="stat">
-            <span className="stat-label">Pista</span>
-            <span className="stat-value">
-              <span className={`flag flag-${s.trackStatus}`}>{TRACK_STATUS_LABEL[s.trackStatus]}</span>
-            </span>
-            <span className="stat-sub">{s.weather?.rainfall ? 'chovendo' : 'sem chuva'}</span>
-          </div>
-        )}
-        <div className="stat">
-          <label className="stat-label" htmlFor="live-delay">
-            Atraso
-          </label>
-          <select id="live-delay" value={delay} onChange={(e) => setDelay(Number(e.target.value))}>
-            {DELAY_OPTIONS.map((d) => (
-              <option key={d} value={d}>
-                {d === 0 ? 'Sem atraso' : `${d} s`}
-              </option>
-            ))}
-          </select>
-          <span className="stat-sub">para sincronizar com a TV</span>
-        </div>
-        {account && <AccountStat account={account} now={now} />}
-      </div>
-
+{!hasSession && sessionBox}
       {accountOff && <AccountBanner />}
 
       {replay && <ReplayBar s={s} send={send} onChoose={canChoose ? () => setChoosing((c) => !c) : undefined} choosing={showChooser} />}
@@ -195,47 +197,42 @@ export default function LiveView({ index }: { index: DataIndex | null }) {
       )}
 
       {hasSession && (
-        <div key={sourceKey(s)}>
-          <div className="pitwall">
-            <DriverColumn d={driverA} slot="A" color={colorA} />
-            <div className="pw-col pw-center">
-              <WeatherBlocks w={s.weather} />
-              <LiveMap s={s} track={track} focus={focus} onToggle={onToggle} colors={colors} />
-              <div className="pw-blk">
-                <span className="pw-label">Telemetria da volta</span>
-                <TracesRequest drivers={[driverA, driverB]} requestTraces={requestTraces} />
-                <LapTraces
-                  traces={s.traces ?? NO_TRACES}
-                  drivers={[driverA, driverB].filter((d): d is LiveDriver => d != null)}
-                  colors={[colorA, colorB]}
-                  lapLength={track?.lapLength ?? null}
-                />
-              </div>
-            </div>
-            <DriverColumn d={driverB} slot="B" color={colorB} right />
-          </div>
-          <div className="dash pw-bottom">
-            <Card title="Torre de tempos" span={12} aside={<span className="muted">clique num piloto para pôr nas colunas</span>}>
-              <LiveTower drivers={s.drivers} focus={focus} onToggle={onToggle} />
-            </Card>
-            <Card title="Direção de prova" span={8} className="rc-card" aside={<span className="muted">mensagens da sessão inteira</span>}>
-              <RaceControlFeed
-                messages={s.raceControl ?? []}
-                count={null}
-                formatTime={messageTime}
-                focus={focus}
-                onToggle={onToggle}
-                teamColors={teamColors}
-              />
-            </Card>
-            <Card title="Clima na sessão" span={4} className="weather-card">
-              {s.weatherHistory?.length ? (
-                <WeatherPanel samples={s.weatherHistory} now={null} formatX={axisTime} />
-              ) : (
-                <p className="muted">Sem dados de clima ainda.</p>
-              )}
-            </Card>
-          </div>
+        <div key={sourceKey(s)} className="lv-grid">
+          {sessionBox}
+          <DriverCard d={driverA} slot="A" color={colorA} />
+          <DriverCard d={driverB} slot="B" color={colorB} />
+          <Box title="Torre de tempos" className="lv-tower-box" aside="clique para pôr em foco">
+            <LiveTower drivers={s.drivers} focus={focus} pair={[pairA, pairB]} onToggle={onToggle} />
+          </Box>
+          <LiveMap s={s} track={track} focus={focus} onToggle={onToggle} colors={colors} />
+          <DuelBox
+            a={driverA}
+            b={driverB}
+            colors={[colorA, colorB]}
+            gap={driverA && driverB ? duelGap(driverA, driverB) : null}
+            series={driverA && driverB && lapGaps ? lapGaps.series(driverA, driverB) : []}
+            isRace={isRace}
+          />
+          <WeatherBox w={s.weather} history={s.weatherHistory ?? NO_WEATHER} />
+          <Box title="Telemetria da volta" className="lv-tel">
+            <TracesRequest drivers={[driverA, driverB]} requestTraces={requestTraces} />
+            <LapTraces
+              traces={s.traces ?? NO_TRACES}
+              drivers={[driverA, driverB].filter((d): d is LiveDriver => d != null)}
+              colors={[colorA, colorB]}
+              lapLength={track?.lapLength ?? null}
+            />
+          </Box>
+          <Box title="Direção de prova" className="lv-rc" aside="sessão inteira">
+            <RaceControlFeed
+              messages={s.raceControl ?? []}
+              count={null}
+              formatTime={messageTime}
+              focus={focus}
+              onToggle={onToggle}
+              teamColors={teamColors}
+            />
+          </Box>
         </div>
       )}
       <p className="foot">
@@ -304,25 +301,25 @@ function LoginLink({ children, className }: { children: ReactNode; className?: s
   )
 }
 
-/** Estado da conta no topo da aba: conectada, vencendo (renovar) ou desconectada (entrar). */
-function AccountStat({ account, now }: { account: LiveAccount; now: number }) {
+/** Estado da conta no bloco da sessão: conectada, vencendo (renovar) ou desconectada (entrar). */
+function AccountLine({ account, now }: { account: LiveAccount; now: number }) {
   const kind = accountKind(account, now)
   const expires = account.expires ?? 0
   return (
-    <div className={`stat acct acct-${kind}`}>
-      <span className="stat-label">Conta F1 TV</span>
-      <span className="stat-value">
-        <i className="acct-dot" aria-hidden="true" />
-        {kind === 'ok' ? 'Conectada' : kind === 'expiring' ? `Vence em ${formatRemaining(expires - now)}` : 'Desconectada'}
-      </span>
-      <span className="stat-sub">
-        {kind === 'ok' ? (
-          `até ${formatExpiry(expires)}`
-        ) : (
-          <LoginLink className="acct-link">{kind === 'expiring' ? 'Renovar agora ↗' : 'Entrar ↗'}</LoginLink>
-        )}
-      </span>
-    </div>
+    <span className={`lv-acct acct-${kind}`} title="Conta F1 TV do backend">
+      <i className="acct-dot" aria-hidden="true" />
+      F1 TV{' '}
+      {kind === 'ok' ? (
+        <span className="muted" title={`Conectada até ${formatExpiry(expires)}`}>
+          até {formatExpiry(expires).split(' às')[0]}
+        </span>
+      ) : (
+        <>
+          {kind === 'expiring' ? `vence em ${formatRemaining(expires - now)}` : 'desconectada'}{' '}
+          <LoginLink className="acct-link">{kind === 'expiring' ? 'Renovar ↗' : 'Entrar ↗'}</LoginLink>
+        </>
+      )}
+    </span>
   )
 }
 
@@ -632,12 +629,11 @@ function LiveMap({
   }, [proj, outline, outline ? 0 : Math.floor(points.length / 50)])
 
   return (
-    <div className="pw-blk pw-map">
-      <div className="pw-blk-head">
-        <span className="pw-label">
-          {s.session.circuit ?? 'Pista'} · {mode === 'cars' ? 'posição dos carros' : 'domínio da pista'}
-        </span>
-        <span className="pw-head-aside">
+    <Box
+      title={`Pista${s.session.circuit ? ` · ${s.session.circuit}` : ''}`}
+      className="lv-map"
+      aside={
+        <>
           {s.trackStatus && mode === 'cars' && <span className={`flag flag-${s.trackStatus}`}>{TRACK_STATUS_LABEL[s.trackStatus]}</span>}
           <span className="seg" role="group" aria-label="O que o mapa mostra">
             <button className={mode === 'cars' ? 'active' : undefined} aria-pressed={mode === 'cars'} onClick={() => setMode('cars')}>
@@ -647,8 +643,9 @@ function LiveMap({
               Domínio
             </button>
           </span>
-        </span>
-      </div>
+        </>
+      }
+    >
       {!proj || !viewBox ? (
         <p className="muted loading">Esperando as posições dos carros…</p>
       ) : mode === 'dominance' ? (
@@ -666,17 +663,18 @@ function LiveMap({
         </div>
       )}
       {!outline && proj && mode === 'cars' && <p className="foot">O traçado aparece depois que um carro completa uma volta limpa.</p>}
-    </div>
+    </Box>
   )
 }
 
 // ---------- Gráficos da volta ao vivo ----------
 
 const NO_TRACES: LiveTraces = {}
+const NO_WEATHER: WeatherSample[] = []
 const TRACE_CHARTS = [
-  { key: 'speed', label: 'Velocidade (km/h)', h: 120, min: 0, max: 360, step: false, ticks: [100, 200, 300] },
-  { key: 'throttle', label: 'Acelerador (%)', h: 56, min: 0, max: 100, step: false, ticks: [50] },
-  { key: 'brake', label: 'Freio', h: 28, min: 0, max: 1, step: true, ticks: [] },
+  { key: 'speed', label: 'Velocidade (km/h)', h: 104, min: 0, max: 360, step: false, ticks: [100, 200, 300] },
+  { key: 'throttle', label: 'Acelerador (%)', h: 40, min: 0, max: 100, step: false, ticks: [50] },
+  { key: 'brake', label: 'Freio', h: 18, min: 0, max: 1, step: true, ticks: [] },
 ] as const
 
 type LiveTraces = NonNullable<LiveSnapshot['traces']>
