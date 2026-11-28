@@ -115,8 +115,8 @@ def test_canais_do_carro_sincronizados_com_o_mapa():
     st = feed_state()
     st.apply(car_data(T0 + 10, 200))
     st.apply(car_data(T0 + 12, 300))
-    # o snapshot mostra o carro 2 s atrás: em T0+12.5 ainda vale a amostra de T0+10
-    assert st.snapshot(now=T0 + 12.5)["drivers"][0]["speed"] == 200
+    # o snapshot mostra o carro 2 s atrás: em T0+12.5 vale T0+10.5, 1/4 do caminho entre as amostras
+    assert st.snapshot(now=T0 + 12.5)["drivers"][0]["speed"] == 225
     assert st.snapshot(now=T0 + 14.5)["drivers"][0]["speed"] == 300
 
 
@@ -201,6 +201,21 @@ def test_volta_atual_nao_cresce_com_o_carro_parado():
     assert len(tr["d"]) == len(tr["speed"]) == len(tr["throttle"]) == len(tr["brake"])
     assert tr["d"][-1] == tr["d"][-2]  # a última amostra (parado) sempre entra
     assert tr["speed"][-1] == 0
+
+
+def test_canais_do_carro_interpolados_entre_amostras():
+    from state import CarHistory
+
+    h = CarHistory()
+    h.add(T0, {"0": 10000, "2": 200, "3": 6, "4": 40, "5": 0, "45": 0})
+    h.add(T0 + 0.28, {"0": 11000, "2": 220, "3": 7, "4": 100, "5": 1, "45": 12})
+    mid = h.at(T0 + 0.07)  # um quarto do caminho
+    assert (mid["0"], mid["2"], mid["4"]) == (10250, 205, 55)
+    assert (mid["3"], mid["5"], mid["45"]) == (6, 0, 0)  # marcha, freio e DRS em degrau
+    assert h.at(T0 + 0.28)["0"] == 11000
+    assert h.at(T0 + 1)["0"] == 11000  # depois da última amostra: o último valor
+    h.add(T0 + 10, {"0": 5000, "2": 80, "4": 0})  # buraco de 9,7 s no feed: não interpola
+    assert h.at(T0 + 3)["0"] == 11000
 
 
 def _timing(time, lines):

@@ -35,6 +35,8 @@ TRACK_STATUS = {"1": "green", "2": "yellow", "4": "sc", "5": "red", "6": "vsc", 
 
 POSITION_LAG_S = 2.0  # posições mostradas um pouco atrás, para interpolar entre amostras
 HISTORY_S = 300.0  # histórico por carro: cobre a volta anterior e a atual, mesmo lentas
+SMOOTH_CHANNELS = ("0", "2", "4")  # RPM, velocidade e acelerador: interpolados entre amostras
+MAX_CAR_GAP_S = 2.0  # buraco maior que isto no feed do carro: não interpola através dele
 MIN_OUTLINE_POINTS = 120
 MAX_OUTLINE_GAP_M = 250.0  # início e fim da volta precisam se encontrar
 WEATHER_HISTORY_MAX = 600  # ~10 h de amostras (o feed manda uma por minuto)
@@ -170,9 +172,27 @@ class CarHistory:
             del self.t[:cut], self.ch[:cut]
 
     def at(self, t: float) -> dict:
-        """Última amostra até o instante t (canais são degraus)."""
+        """Canais no instante t: a última amostra até t, com RPM, velocidade e acelerador
+        interpolados até a amostra seguinte.
+
+        O feed manda ~3,7 amostras por segundo e o snapshot sai 4 vezes por segundo: sem
+        interpolar, 1 em cada ~5 snapshots repetia o valor (motor e pedais paravam meio segundo
+        e depois pulavam). Marcha, freio e DRS continuam em degrau.
+        """
         i = bisect.bisect_right(self.t, t) - 1
-        return self.ch[i] if i >= 0 and t - self.t[i] < 5 else {}
+        if i < 0 or t - self.t[i] >= 5:
+            return {}
+        cur = self.ch[i]
+        if i + 1 >= len(self.t) or self.t[i + 1] - self.t[i] > MAX_CAR_GAP_S:
+            return cur
+        nxt = self.ch[i + 1]
+        k = (t - self.t[i]) / (self.t[i + 1] - self.t[i])
+        out = dict(cur)
+        for key in SMOOTH_CHANNELS:
+            a, b = to_float(cur.get(key)), to_float(nxt.get(key))
+            if a is not None and b is not None:
+                out[key] = round(a + (b - a) * k)
+        return out
 
     def trace(self, t0: float, t1: float, lap: int) -> dict | None:
         """Canais de t0 a t1 com a distância integrada pela velocidade (como o FastF1).

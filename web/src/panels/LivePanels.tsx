@@ -125,10 +125,12 @@ function RpmGauge({ rpm, gear, color }: { rpm: number | null; gear: number | nul
   const cx = 46
   const cy = 48
   const at = (a: number) => `${(cx + R * Math.cos(a)).toFixed(1)},${(cy - R * Math.sin(a)).toFixed(1)}`
+  const arc = `M ${at(Math.PI)} A ${R} ${R} 0 0 1 ${at(0)}`
   return (
     <svg viewBox="0 0 92 56" className="rpm-gauge" aria-hidden="true">
-      <path d={`M ${at(Math.PI)} A ${R} ${R} 0 0 1 ${at(0)}`} className="rpm-track" />
-      {k > 0 && <path d={`M ${at(Math.PI)} A ${R} ${R} 0 0 1 ${at(Math.PI * (1 - k))}`} className="rpm-fill" style={{ stroke: color }} />}
+      <path d={arc} className="rpm-track" />
+      {/* arco fixo, preenchido pelo traço: o CSS anima o valor entre um snapshot e o seguinte */}
+      <path d={arc} pathLength={1} className="rpm-fill" style={{ stroke: color, strokeDashoffset: 1 - k, opacity: k > 0 ? 1 : 0 }} />
       <text x={cx} y={cy - 2}>
         {gear == null ? '—' : gear === 0 ? 'N' : gear}
       </text>

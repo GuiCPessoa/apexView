@@ -723,7 +723,9 @@ const LapTraces = memo(
                   x.previous ? [{ key: `${x.d.driver}-prev`, color: x.color, d: x.previous.d, values: x.previous[c.key], previous: true }] : [],
                 ),
                 ...lines.flatMap((x) =>
-                  x.current ? [{ key: `${x.d.driver}-cur`, color: x.color, d: x.current.d, values: x.current[c.key], previous: false }] : [],
+                  x.current
+                    ? [{ key: `${x.d.driver}-cur`, color: x.color, d: x.current.d, values: x.current[c.key], previous: false, lap: x.current.lap }]
+                    : [],
                 ),
               ]}
             />
