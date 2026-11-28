@@ -3917,8 +3917,12 @@ select.ms-add {
 }
 
 .lv-tel .trace-chart {
-  margin-top: 4px;
+  margin-top: 10px;
   padding-top: 0;
+}
+
+.lv-tel .traces-legend + .trace-chart {
+  margin-top: 6px;
 }
 
 .lv-tel .trace-label {

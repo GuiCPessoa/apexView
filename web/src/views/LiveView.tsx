@@ -673,8 +673,8 @@ const NO_TRACES: LiveTraces = {}
 const NO_WEATHER: WeatherSample[] = []
 const TRACE_CHARTS = [
   { key: 'speed', label: 'Velocidade (km/h)', h: 104, min: 0, max: 360, step: false, ticks: [100, 200, 300] },
-  { key: 'throttle', label: 'Acelerador (%)', h: 40, min: 0, max: 100, step: false, ticks: [50] },
-  { key: 'brake', label: 'Freio', h: 18, min: 0, max: 1, step: true, ticks: [] },
+  { key: 'throttle', label: 'Acelerador (%)', h: 46, min: 0, max: 100, step: false, ticks: [50] },
+  { key: 'brake', label: 'Freio', h: 22, min: 0, max: 1, step: true, ticks: [] },
 ] as const
 
 type LiveTraces = NonNullable<LiveSnapshot['traces']>
